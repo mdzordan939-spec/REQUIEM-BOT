@@ -376,7 +376,30 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function showHome() {
+    stopChessTimer();
     hideMainSections();
+
+    ['.hero', '.profile', '.stats', '.menu', '.section-heading'].forEach(selector => {
+        $$(selector).forEach(element => {
+            element.style.display = '';
+        });
+    });
+
+    setNavActive('home');
+    state.page = 'home';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+    ['.hero', '.profile', '.stats', '.menu', '.section-heading'].forEach(selector => {
+        $$(selector).forEach(element => {
+            element.style.display = '';
+        });
+    });
+
+    setNavActive('home');
+    state.page = 'home';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 
     $$('.hero,.profile,.stats,.menu,.section-heading').forEach(el => {
       el.style.display = '';
