@@ -126,8 +126,9 @@ button {
     }
 }
 
+
 /* =====================================
-   KATANA SLASHES
+   KATANA — CHAOTIC QUICK SLASHES
    ===================================== */
 
 .slash {
@@ -139,60 +140,67 @@ button {
     background: linear-gradient(
         90deg,
         transparent,
-        rgba(255, 20, 55, .2),
+        rgba(255, 20, 55, .4),
         #ff2348,
-        #ffd0dc,
+        #fff0f3,
         #ff2348,
         transparent
     );
 
     box-shadow:
-        0 0 8px #ff123b,
-        0 0 22px rgba(255, 0, 45, .8),
-        0 0 50px rgba(255, 0, 45, .4);
+        0 0 6px #ff123b,
+        0 0 15px rgba(255, 0, 45, .8),
+        0 0 28px rgba(255, 0, 45, .4);
 
     opacity: 0;
-    transform: rotate(-32deg);
-
-    animation: katanaSlash 6s ease-in-out infinite;
+    animation: chaoticSlash var(--speed) cubic-bezier(.15,.7,.25,1) infinite;
 }
 
 .slash-a {
-    width: 110vw;
+    width: 38vw;
     top: 24%;
-    left: -120%;
+    left: -45%;
+    --angle: -32deg;
+    --speed: 3.7s;
+    animation-delay: -1.2s;
 }
 
 .slash-b {
-    width: 85vw;
-    top: 53%;
-    left: -110%;
-    animation-delay: 2s;
+    width: 25vw;
+    top: 48%;
+    left: -35%;
+    --angle: 48deg;
+    --speed: 4.9s;
+    animation-delay: -3.1s;
 }
 
 .slash-c {
-    width: 95vw;
-    top: 78%;
-    left: -110%;
-    animation-delay: 4s;
+    width: 45vw;
+    top: 72%;
+    left: -50%;
+    --angle: -58deg;
+    --speed: 3.2s;
+    animation-delay: -2.4s;
 }
 
-@keyframes katanaSlash {
-    0%, 12% {
-        transform: translateX(-10vw) rotate(-32deg);
+@keyframes chaoticSlash {
+    0%, 15% {
+        transform: translate(0, 0) rotate(var(--angle)) scaleX(.3);
         opacity: 0;
     }
 
     18% {
         opacity: 1;
+        transform: translate(12vw, -2vh) rotate(var(--angle)) scaleX(1);
     }
 
-    38% {
-        transform: translateX(230vw) rotate(-32deg);
+    25% {
+        transform: translate(95vw, 8vh) rotate(var(--angle)) scaleX(.7);
         opacity: .8;
     }
 
-    42%, 100% {
+    29%, 100% {
+        transform: translate(110vw, 10vh) rotate(var(--angle)) scaleX(.2);
         opacity: 0;
     }
 }
