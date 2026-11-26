@@ -24,11 +24,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function showToast(message) {
         if (!toast) return;
-
         toast.textContent = message;
         toast.classList.add('show');
         clearTimeout(toastTimer);
-
         toastTimer = setTimeout(() => {
             toast.classList.remove('show');
         }, 2200);
@@ -46,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // ==========================================
-    // REQUIEM CHESS — DESIGN
+    // REQUIEM CHESS — STYLES
     // ==========================================
 
     const chessStyle = document.createElement('style');
@@ -235,33 +233,49 @@ document.addEventListener('DOMContentLoaded', () => {
             background: #a50d29;
         }
 
+        /* КРУПНЫЕ И КОНТРАСТНЫЕ ФИГУРЫ */
+
         .chess-piece {
-            font-family: "Segoe UI Symbol", "DejaVu Sans", serif;
-            font-size: clamp(20px, 6.2vw, 48px);
+            display: block;
+            position: relative;
+            z-index: 1;
+            font-family: "DejaVu Sans", "Segoe UI Symbol", serif;
+            font-size: clamp(32px, 8vw, 58px);
             line-height: 1;
+            text-align: center;
             pointer-events: none;
+            transform: scale(1.18);
+            transform-origin: center;
+            filter: drop-shadow(0 2px 3px #000);
         }
 
         .chess-white-piece {
-            color: #f0193c;
+            color: #ff1744;
+            -webkit-text-stroke: 0.6px #ffb0bd;
             text-shadow:
-                0 0 3px #ff8a9b,
-                0 0 9px rgba(255, 0, 40, .5),
-                1px 2px 2px #160006;
+                0 0 4px #ff8a9b,
+                0 0 10px rgba(255, 0, 40, .9),
+                0 0 17px rgba(255, 0, 40, .55);
         }
 
         .chess-black-piece {
-            color: #151515;
-            -webkit-text-stroke: 1px #777;
+            color: #171717;
+            -webkit-text-stroke: 2px #d0d0d0;
             text-shadow:
-                0 2px 3px #000,
-                0 0 5px rgba(255,255,255,.2);
+                0 0 3px #fff,
+                0 0 7px rgba(255,255,255,.7),
+                0 3px 4px #000;
+        }
+
+        .chess-black-pawn {
+            transform: scale(1.42);
+            -webkit-text-stroke: 2.2px #e0e0e0;
         }
 
         .chess-coord {
             position: absolute;
             z-index: 2;
-            color: rgba(255,255,255,.52);
+            color: rgba(255,255,255,.58);
             font-size: 9px;
             line-height: 1;
             pointer-events: none;
@@ -364,14 +378,15 @@ document.addEventListener('DOMContentLoaded', () => {
             background: #a90d25;
         }
 
+        .chess-button:disabled {
+            opacity: .6;
+            cursor: wait;
+        }
+
         .chess-button-secondary {
             background: #151112;
             border-color: #49202a;
             color: #ddd;
-        }
-
-        .chess-button-secondary:active {
-            background: #281016;
         }
 
         #chessCode {
@@ -406,17 +421,6 @@ document.addEventListener('DOMContentLoaded', () => {
         .chess-move-empty {
             color: #666;
             font-size: 11px;
-        }
-
-        .chess-actions {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            margin-top: 10px;
-        }
-
-        .chess-actions .chess-button {
-            margin-top: 0;
         }
 
         #chessLobby {
@@ -477,10 +481,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 grid-column: 1 / -1;
             }
 
-            .chess-heading {
-                margin-bottom: 12px;
-            }
-
             .chess-brand {
                 font-size: 16px;
             }
@@ -490,7 +490,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             .chess-piece {
-                font-size: clamp(20px, 8vw, 42px);
+                font-size: clamp(27px, 9vw, 50px);
             }
         }
 
@@ -503,13 +503,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 grid-column: auto;
             }
 
-            .chess-online {
-                font-size: 9px;
+            .chess-piece {
+                font-size: clamp(23px, 8.5vw, 38px);
             }
         }
     `;
 
     document.head.appendChild(chessStyle);
+
+    // ==========================================
+    // CHESS INTERFACE
+    // ==========================================
 
     const chessPanel = document.createElement('section');
     chessPanel.id = 'chessPanel';
@@ -539,14 +543,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             <div class="chess-divider">ИЛИ</div>
 
-            <input
-                id="chessCode"
+            <input id="chessCode"
                 maxlength="6"
                 placeholder="КОД КОМНАТЫ"
-                autocomplete="off"
-            >
+                autocomplete="off">
 
-            <button class="chess-button chess-button-secondary" id="joinChess">
+            <button class="chess-button chess-button-secondary"
+                id="joinChess">
                 ПРИСОЕДИНИТЬСЯ
             </button>
         </div>
@@ -565,14 +568,17 @@ document.addEventListener('DOMContentLoaded', () => {
                                 Уровень 1 · ELO 1000
                             </div>
                         </div>
-                        <div class="chess-player-side">ЧЁРНЫЕ</div>
+                        <div class="chess-player-side" id="opponentSide">
+                            ЧЁРНЫЕ
+                        </div>
                     </div>
 
                     <div class="chess-board-frame">
                         <div id="chessBoard"></div>
                     </div>
 
-                    <div class="chess-player" style="margin-top:10px;margin-bottom:0">
+                    <div class="chess-player"
+                        style="margin-top:10px;margin-bottom:0">
                         <div class="chess-player-avatar">R</div>
                         <div class="chess-player-info">
                             <div class="chess-player-name" id="myChessName"></div>
@@ -580,12 +586,18 @@ document.addEventListener('DOMContentLoaded', () => {
                                 Уровень 1 · ELO 1000
                             </div>
                         </div>
-                        <div class="chess-player-side">КРАСНЫЕ</div>
+                        <div class="chess-player-side" id="mySide">
+                            КРАСНЫЕ
+                        </div>
                     </div>
 
                     <div class="chess-status">
-                        <span class="chess-status-label">Состояние партии</span>
-                        <span id="chessStatus">Ожидание подключения...</span>
+                        <span class="chess-status-label">
+                            Состояние партии
+                        </span>
+                        <span id="chessStatus">
+                            Ожидание подключения...
+                        </span>
                     </div>
                 </div>
 
@@ -612,7 +624,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     <div class="chess-card">
                         <div class="chess-card-title">Управление</div>
-                        <button class="chess-button chess-button-secondary" id="leaveChess">
+                        <button class="chess-button chess-button-secondary"
+                            id="leaveChess">
                             ВЫЙТИ ИЗ ИГРЫ
                         </button>
                     </div>
@@ -630,69 +643,95 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================
-    // CHESS LOGIC / CONNECTION
+    // CHESS LOGIC
     // ==========================================
 
-    let chessSocket = null;
-    let currentRoom = '';
-    let playerColor = '';
-    let currentFen = '';
-    let selectedSquare = null;
-    let gameFinished = false;
-    let moveNumber = 0;
+    const boardElement = document.getElementById('chessBoard');
+    const lobbyElement = document.getElementById('chessLobby');
+    const gameElement = document.getElementById('chessGame');
+
+    const chessStatus = document.getElementById('chessStatus');
+    const chessRoomCode = document.getElementById('chessRoomCode');
+    const chessMoves = document.getElementById('chessMoves');
+
+    const myChessName = document.getElementById('myChessName');
+    const opponentName = document.getElementById('opponentName');
+
+    const opponentSide = document.getElementById('opponentSide');
+    const mySide = document.getElementById('mySide');
 
     const pieces = {
-        K: '♔', Q: '♕', R: '♖',
-        B: '♗', N: '♘', P: '♙',
-        k: '♚', q: '♛', r: '♜',
-        b: '♝', n: '♞', p: '♟'
+        K: '♔',
+        Q: '♕',
+        R: '♖',
+        B: '♗',
+        N: '♘',
+        P: '♙',
+
+        k: '♚',
+        q: '♛',
+        r: '♜',
+        b: '♝',
+        n: '♞',
+        p: '♟'
     };
 
-    const myNameElement = document.getElementById('myChessName');
-    if (myNameElement) myNameElement.textContent = username;
+    const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 
-    function showChessGame() {
-        document.getElementById('chessLobby').style.display = 'none';
-        document.getElementById('chessGame').style.display = 'block';
-    }
+    let socket = null;
+    let currentRoom = null;
+    let playerColor = null;
+    let currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
-    function showChessLobby() {
-        document.getElementById('chessLobby').style.display = 'block';
-        document.getElementById('chessGame').style.display = 'none';
-    }
+    let selectedSquare = null;
+    let gameFinished = false;
+    let isMyTurn = false;
+    let moveHistory = [];
+    let boardFlipped = false;
 
-    function updatePlayerLabels() {
-        const opponent = document.getElementById('opponentName');
-        const mySide = document.querySelector('.chess-player-side:last-child');
+    // ==========================================
+    // HELPERS
+    // ==========================================
 
-        if (playerColor === 'black') {
-            if (opponent) opponent.textContent = 'Красный игрок';
-            if (myNameElement) myNameElement.textContent = username;
-            if (mySide) mySide.textContent = 'ЧЁРНЫЕ';
-        } else {
-            if (opponent) opponent.textContent = 'Соперник';
-            if (myNameElement) myNameElement.textContent = username;
-            if (mySide) mySide.textContent = 'КРАСНЫЕ';
+    function setChessStatus(message) {
+        if (chessStatus) {
+            chessStatus.textContent = message;
         }
     }
 
-    function renderBoard(fen) {
-        currentFen = fen;
+    function showChessGame() {
+        lobbyElement.style.display = 'none';
+        gameElement.style.display = 'block';
+    }
 
-        const boardElement = document.getElementById('chessBoard');
-        if (!boardElement) return;
+    function showChessLobby() {
+        lobbyElement.style.display = 'block';
+        gameElement.style.display = 'none';
+    }
 
-        boardElement.innerHTML = '';
+    function getTelegramInitData() {
+        return tg?.initData || '';
+    }
 
-        const rows = fen.split(' ')[0].split('/');
-        let board = [];
+    function getWebSocketUrl(room) {
+        const initData = encodeURIComponent(getTelegramInitData());
 
-        rows.forEach(row => {
+        return `wss://requiem-bot-7eyu.onrender.com/ws/chess/${encodeURIComponent(room)}?initData=${initData}`;
+    }
+
+    function parseFen(fen) {
+        const position = fen.split(' ')[0];
+        const rows = position.split('/');
+        const board = [];
+
+        for (const row of rows) {
             const line = [];
 
             for (const char of row) {
                 if (/[1-8]/.test(char)) {
-                    for (let i = 0; i < Number(char); i++) {
+                    const emptyCount = Number(char);
+
+                    for (let i = 0; i < emptyCount; i++) {
                         line.push('');
                     }
                 } else {
@@ -701,487 +740,655 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             board.push(line);
-        });
-
-        if (playerColor === 'black') {
-            board.reverse();
-            board = board.map(row => row.slice().reverse());
         }
 
-        board.forEach((row, rowIndex) => {
-            row.forEach((piece, colIndex) => {
-                const square = document.createElement('div');
+        return board;
+    }
 
-                const realRow = playerColor === 'black'
-                    ? 7 - rowIndex
-                    : rowIndex;
+    function squareName(row, col) {
+        return files[col] + (8 - row);
+    }
 
-                const realCol = playerColor === 'black'
-                    ? 7 - colIndex
-                    : colIndex;
+    function getBoardCoordinates() {
+        const coordinates = [];
 
-                const file = 'abcdefgh'[realCol];
-                const rank = 8 - realRow;
-                const squareName = file + rank;
+        if (boardFlipped) {
+            for (let row = 7; row >= 0; row--) {
+                for (let col = 7; col >= 0; col--) {
+                    coordinates.push({ row, col });
+                }
+            }
+        } else {
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    coordinates.push({ row, col });
+                }
+            }
+        }
 
-                square.className = 'chess-square ' +
-                    ((rowIndex + colIndex) % 2 === 0
-                        ? 'chess-light'
-                        : 'chess-dark');
+        return coordinates;
+    }
 
-                if (selectedSquare === squareName) {
-                    square.classList.add('chess-selected');
+    function isOwnPiece(piece) {
+        if (!piece || !playerColor) return false;
+
+        if (playerColor === 'white') {
+            return piece === piece.toUpperCase();
+        }
+
+        return piece === piece.toLowerCase();
+    }
+
+    function updatePlayerLabels() {
+        const isWhite = playerColor === 'white';
+
+        if (myChessName) {
+            myChessName.textContent = username;
+        }
+
+        if (opponentName) {
+            opponentName.textContent = 'Соперник';
+        }
+
+        if (mySide) {
+            mySide.textContent = isWhite ? 'КРАСНЫЕ' : 'ЧЁРНЫЕ';
+        }
+
+        if (opponentSide) {
+            opponentSide.textContent = isWhite ? 'ЧЁРНЫЕ' : 'КРАСНЫЕ';
+        }
+    }
+
+    // ==========================================
+    // BOARD RENDERING
+    // ==========================================
+
+    function renderBoard() {
+        if (!boardElement) return;
+
+        const board = parseFen(currentFen);
+        boardElement.innerHTML = '';
+
+        const coordinates = getBoardCoordinates();
+
+        coordinates.forEach(({ row, col }) => {
+            const piece = board[row]?.[col] || '';
+            const square = document.createElement('div');
+
+            square.className = 'chess-square';
+            square.classList.add(
+                (row + col) % 2 === 0 ? 'chess-light' : 'chess-dark'
+            );
+
+            const name = squareName(row, col);
+            square.dataset.square = name;
+
+            if (selectedSquare === name) {
+                square.classList.add('chess-selected');
+            }
+
+            const pieceElement = document.createElement('span');
+
+            pieceElement.className = 'chess-piece';
+            pieceElement.textContent = pieces[piece] || '';
+
+            if (piece) {
+                if (piece === piece.toUpperCase()) {
+                    pieceElement.classList.add('chess-white-piece');
+                } else {
+                    pieceElement.classList.add('chess-black-piece');
                 }
 
-                if (piece) {
-                    const pieceElement = document.createElement('span');
-                    pieceElement.className = 'chess-piece ' +
-                        (piece === piece.toUpperCase()
-                            ? 'chess-white-piece'
-                            : 'chess-black-piece');
-
-                    pieceElement.textContent = pieces[piece] || '';
-                    square.appendChild(pieceElement);
+                if (piece === 'p') {
+                    pieceElement.classList.add('chess-black-pawn');
                 }
+            }
 
-                if (colIndex === 0) {
-                    const rankLabel = document.createElement('span');
-                    rankLabel.className = 'chess-coord chess-coord-rank';
-                    rankLabel.textContent = rank;
-                    square.appendChild(rankLabel);
-                }
+            square.appendChild(pieceElement);
 
-                if (rowIndex === 7) {
-                    const fileLabel = document.createElement('span');
-                    fileLabel.className = 'chess-coord chess-coord-file';
-                    fileLabel.textContent = file;
-                    square.appendChild(fileLabel);
-                }
+            if (col === (boardFlipped ? 7 : 0)) {
+                const rank = document.createElement('span');
+                rank.className = 'chess-coord chess-coord-rank';
+                rank.textContent = String(8 - row);
+                square.appendChild(rank);
+            }
 
-                square.addEventListener('click', () => {
-                    handleSquareClick(squareName, piece);
-                });
+            if (row === (boardFlipped ? 0 : 7)) {
+                const file = document.createElement('span');
+                file.className = 'chess-coord chess-coord-file';
+                file.textContent = files[col];
+                square.appendChild(file);
+            }
 
-                boardElement.appendChild(square);
+            square.addEventListener('click', () => {
+                handleSquareClick(name);
             });
+
+            boardElement.appendChild(square);
         });
     }
 
-    function handleSquareClick(square, piece) {
-        if (!chessSocket || chessSocket.readyState !== WebSocket.OPEN) {
+    // ==========================================
+    // MOVE SELECTION
+    // ==========================================
+
+    function handleSquareClick(square) {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+            showToast('Нет подключения к игре');
             return;
         }
 
-        if (gameFinished) return;
+        if (gameFinished) {
+            showToast('Партия уже завершена');
+            return;
+        }
 
-        const isOwnPiece = piece && (
-            playerColor === 'white'
-                ? piece === piece.toUpperCase()
-                : piece === piece.toLowerCase()
-        );
+        if (!isMyTurn) {
+            showToast('Сейчас ход соперника');
+            return;
+        }
+
+        const board = parseFen(currentFen);
+        const col = files.indexOf(square[0]);
+        const row = 8 - Number(square[1]);
+
+        const clickedPiece = board[row]?.[col] || '';
 
         if (!selectedSquare) {
-            if (isOwnPiece) {
-                selectedSquare = square;
-                renderBoard(currentFen);
+            if (!clickedPiece || !isOwnPiece(clickedPiece)) {
+                showToast('Выбери свою фигуру');
+                return;
             }
+
+            selectedSquare = square;
+            renderBoard();
             return;
         }
 
-        if (isOwnPiece) {
+        if (selectedSquare === square) {
+            selectedSquare = null;
+            renderBoard();
+            return;
+        }
+
+        if (clickedPiece && isOwnPiece(clickedPiece)) {
             selectedSquare = square;
-            renderBoard(currentFen);
+            renderBoard();
             return;
         }
 
         const move = selectedSquare + square;
 
-        chessSocket.send(JSON.stringify({
+        selectedSquare = null;
+        renderBoard();
+
+        sendChessMove(move);
+    }
+
+    function sendChessMove(move) {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+            showToast('Соединение потеряно');
+            return;
+        }
+
+        socket.send(JSON.stringify({
             type: 'move',
             move: move
         }));
-
-        selectedSquare = null;
-        renderBoard(currentFen);
     }
+
+    // ==========================================
+    // MOVE HISTORY
+    // ==========================================
 
     function addMoveToHistory(move) {
         if (!move) return;
 
-        const movesElement = document.getElementById('chessMoves');
-        if (!movesElement) return;
+        moveHistory.push(move);
 
-        if (moveNumber === 0) {
-            movesElement.innerHTML = '';
-        }
+        if (!chessMoves) return;
 
-        moveNumber++;
+        chessMoves.innerHTML = '';
 
-        const moveElement = document.createElement('div');
-        moveElement.textContent = moveNumber + '. ' + move;
-        movesElement.appendChild(moveElement);
-        movesElement.scrollTop = movesElement.scrollHeight;
+        moveHistory.forEach((item, index) => {
+            const line = document.createElement('div');
+
+            line.textContent = `${index + 1}. ${item}`;
+            chessMoves.appendChild(line);
+        });
+
+        chessMoves.scrollTop = chessMoves.scrollHeight;
     }
 
-    function connectToRoom(roomId) {
-        if (!tg?.initData) {
-            showToast('Открой игру через Telegram');
+    // ==========================================
+    // WEBSOCKET CONNECTION
+    // ==========================================
+
+    function connectToRoom(room) {
+        if (socket) {
+            socket.onclose = null;
+            socket.close();
+            socket = null;
+        }
+
+        currentRoom = room;
+        selectedSquare = null;
+        gameFinished = false;
+        moveHistory = [];
+        playerColor = null;
+        boardFlipped = false;
+
+        if (chessRoomCode) {
+            chessRoomCode.textContent = room;
+        }
+
+        if (chessMoves) {
+            chessMoves.innerHTML = `
+                <span class="chess-move-empty">
+                    Ходы появятся здесь
+                </span>
+            `;
+        }
+
+        currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+
+        showChessGame();
+        setChessStatus('Подключение...');
+        renderBoard();
+
+        try {
+            socket = new WebSocket(getWebSocketUrl(room));
+        } catch (error) {
+            console.error('Chess WebSocket error:', error);
+            setChessStatus('Ошибка подключения');
+            showToast('Не удалось подключиться');
             return;
         }
 
-        if (chessSocket) {
-            chessSocket.close();
-            chessSocket = null;
-        }
+        socket.addEventListener('open', () => {
+            setChessStatus('Подключено');
+        });
 
-        currentRoom = roomId;
-        selectedSquare = null;
-        gameFinished = false;
-        moveNumber = 0;
-
-        document.getElementById('chessMoves').innerHTML =
-            '<span class="chess-move-empty">Ходы появятся здесь</span>';
-
-        const protocol = location.protocol === 'https:'
-            ? 'wss:'
-            : 'ws:';
-
-        const url = protocol + '//' +
-            new URL(API_URL).host +
-            '/ws/chess/' + encodeURIComponent(roomId) +
-            '?initData=' + encodeURIComponent(tg.initData);
-
-        chessSocket = new WebSocket(url);
-
-        showChessGame();
-
-        document.getElementById('chessRoomCode').textContent = roomId;
-
-        document.getElementById('chessStatus').textContent =
-            'Подключение...';
-
-        chessSocket.onopen = () => {
-            showToast('Соединение установлено');
-        };
-
-        chessSocket.onmessage = event => {
+        socket.addEventListener('message', (event) => {
             let data;
 
             try {
                 data = JSON.parse(event.data);
             } catch (error) {
-                console.error('CHESS MESSAGE ERROR:', error);
+                console.error('Invalid chess message:', error);
                 return;
             }
 
-            if (data.error) {
-                showToast(data.error);
-                return;
+            handleChessMessage(data);
+        });
+
+        socket.addEventListener('close', () => {
+            if (!gameFinished && currentRoom) {
+                setChessStatus('Соединение закрыто');
             }
+        });
 
-            if (data.type === 'connected') {
-                playerColor = data.color;
-                updatePlayerLabels();
-            }
-
-            if (data.move) {
-                addMoveToHistory(data.move);
-            }
-
-            if (data.fen) {
-                renderBoard(data.fen);
-
-                document.getElementById('chessStatus').textContent =
-                    data.game_over
-                        ? 'Партия завершена'
-                        : 'Ход: ' + (
-                            data.turn === 'white' ? 'красных' : 'чёрных'
-                        );
-            }
-
-            if (data.game_over) {
-                gameFinished = true;
-
-                const status = document.getElementById('chessStatus');
-
-                if (data.result === '1-0') {
-                    status.textContent = playerColor === 'white'
-                        ? 'ПОБЕДА!'
-                        : 'ПОРАЖЕНИЕ';
-                } else if (data.result === '0-1') {
-                    status.textContent = playerColor === 'black'
-                        ? 'ПОБЕДА!'
-                        : 'ПОРАЖЕНИЕ';
-                } else {
-                    status.textContent = 'НИЧЬЯ';
-                }
-
-                tg?.HapticFeedback?.notificationOccurred('success');
-            }
-        };
-
-        chessSocket.onerror = () => {
-            showToast('Ошибка подключения');
-        };
-
-        chessSocket.onclose = () => {
-            if (!gameFinished) {
-                showToast('Соединение закрыто');
-            }
-        };
+        socket.addEventListener('error', (error) => {
+            console.error('Chess socket error:', error);
+            setChessStatus('Ошибка соединения');
+        });
     }
 
     // ==========================================
-    // CREATE ROOM
+    // SERVER MESSAGES
     // ==========================================
 
-    document.getElementById('createChess').addEventListener('click', async () => {
-        if (!tg?.initData) {
-            showToast('Открой REQUIEM через Telegram');
-            return;
+    function handleChessMessage(data) {
+        if (!data || typeof data !== 'object') return;
+
+        if (data.color) {
+            playerColor = data.color.toLowerCase();
+
+            if (playerColor === 'black' || playerColor === 'b') {
+                playerColor = 'black';
+            } else if (playerColor === 'white' || playerColor === 'w') {
+                playerColor = 'white';
+            }
+
+            boardFlipped = playerColor === 'black';
+            updatePlayerLabels();
         }
 
+        if (data.fen) {
+            currentFen = data.fen;
+        }
+
+        if (typeof data.turn === 'string') {
+            const turn = data.turn.toLowerCase();
+
+            isMyTurn =
+                (playerColor === 'white' && (turn === 'w' || turn === 'white')) ||
+                (playerColor === 'black' && (turn === 'b' || turn === 'black'));
+        }
+
+        if (data.move) {
+            addMoveToHistory(data.move);
+        }
+
+        if (data.opponent_name && opponentName) {
+            opponentName.textContent = data.opponent_name;
+        }
+
+        if (data.game_over) {
+            gameFinished = true;
+            isMyTurn = false;
+
+            if (data.result === '1-0') {
+                setChessStatus('Победа красных');
+            } else if (data.result === '0-1') {
+                setChessStatus('Победа чёрных');
+            } else {
+                setChessStatus('Ничья');
+            }
+        } else if (isMyTurn) {
+            setChessStatus('Ваш ход');
+        } else {
+            setChessStatus('Ход соперника');
+        }
+
+        selectedSquare = null;
+        renderBoard();
+    }
+
+    // ==========================================
+    // CREATE CHESS ROOM
+    // ==========================================
+
+    async function createChessRoom() {
         const button = document.getElementById('createChess');
-        button.disabled = true;
-        button.textContent = 'СОЗДАНИЕ...';
+
+        if (button) {
+            button.disabled = true;
+            button.textContent = 'СОЗДАНИЕ...';
+        }
 
         try {
-            const response = await fetch(API_URL + '/api/chess/create', {
+            const response = await fetch(`${API_URL}/api/chess/create`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'X-Telegram-Init-Data': getTelegramInitData()
                 },
                 body: JSON.stringify({
-                    initData: tg.initData
+                    initData: getTelegramInitData()
                 })
             });
 
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.detail || 'Ошибка создания комнаты');
+                throw new Error(data.detail || data.error || 'Ошибка создания комнаты');
             }
 
-            connectToRoom(data.room_id);
+            const room =
+                data.room ||
+                data.code ||
+                data.room_code ||
+                data.room_id;
+
+            if (!room) {
+                throw new Error('Сервер не вернул код комнаты');
+            }
+
+            connectToRoom(String(room).toUpperCase());
+            showToast('Комната создана');
 
         } catch (error) {
-            showToast(error.message);
-            console.error('CHESS CREATE ERROR:', error);
+            console.error('Create room error:', error);
+            showToast(error.message || 'Не удалось создать комнату');
         } finally {
-            button.disabled = false;
-            button.textContent = 'СОЗДАТЬ КОМНАТУ';
+            if (button) {
+                button.disabled = false;
+                button.textContent = 'СОЗДАТЬ КОМНАТУ';
+            }
         }
-    });
+    }
 
     // ==========================================
-    // JOIN ROOM
+    // JOIN CHESS ROOM
     // ==========================================
 
-    document.getElementById('joinChess').addEventListener('click', () => {
-        const code = document.getElementById('chessCode')
-            .value.trim().toUpperCase();
+    function joinChessRoom() {
+        const input = document.getElementById('chessCode');
 
-        if (!/^[A-F0-9]{6}$/.test(code)) {
-            showToast('Проверь код комнаты');
+        const room = input?.value
+            .trim()
+            .toUpperCase();
+
+        if (!room) {
+            showToast('Введи код комнаты');
             return;
         }
 
-        connectToRoom(code);
-    });
+        if (!/^[A-F0-9]{6}$/.test(room)) {
+            showToast('Код должен состоять из 6 символов');
+            return;
+        }
+
+        connectToRoom(room);
+    }
 
     // ==========================================
     // COPY ROOM CODE
     // ==========================================
 
-    document.getElementById('copyChessCode').addEventListener('click', async () => {
+    async function copyChessRoomCode() {
+        if (!currentRoom) {
+            showToast('Комната не найдена');
+            return;
+        }
+
         try {
             await navigator.clipboard.writeText(currentRoom);
             showToast('Код скопирован');
-        } catch {
-            showToast('Не удалось скопировать код');
+        } catch (error) {
+            const temporaryInput = document.createElement('textarea');
+
+            temporaryInput.value = currentRoom;
+            document.body.appendChild(temporaryInput);
+            temporaryInput.select();
+
+            try {
+                document.execCommand('copy');
+                showToast('Код скопирован');
+            } catch (copyError) {
+                showToast('Не удалось скопировать код');
+            }
+
+            temporaryInput.remove();
         }
-    });
+    }
 
     // ==========================================
-    // LEAVE GAME
+    // LEAVE CHESS GAME
     // ==========================================
 
-    document.getElementById('leaveChess').addEventListener('click', () => {
-        if (chessSocket) {
-            chessSocket.close();
-            chessSocket = null;
+    function leaveChessGame() {
+        if (socket) {
+            socket.onclose = null;
+            socket.close();
+            socket = null;
         }
 
-        currentRoom = '';
+        currentRoom = null;
+        playerColor = null;
         selectedSquare = null;
         gameFinished = false;
-        playerColor = '';
-        currentFen = '';
-        moveNumber = 0;
+        isMyTurn = false;
+        moveHistory = [];
+        boardFlipped = false;
 
         showChessLobby();
         showToast('Ты вышел из партии');
-    });
+    }
+
+    // ==========================================
+    // BUTTON EVENTS
+    // ==========================================
+
+    document.getElementById('createChess')
+        ?.addEventListener('click', createChessRoom);
+
+    document.getElementById('joinChess')
+        ?.addEventListener('click', joinChessRoom);
+
+    document.getElementById('copyChessCode')
+        ?.addEventListener('click', copyChessRoomCode);
+
+    document.getElementById('leaveChess')
+        ?.addEventListener('click', leaveChessGame);
+
+    document.getElementById('chessCode')
+        ?.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                joinChessRoom();
+            }
+        });
 
     // ==========================================
     // NAVIGATION
     // ==========================================
 
-    document.querySelectorAll('[data-page]').forEach(el => {
-        el.addEventListener('click', () => {
-            const page = el.dataset.page;
+    function showPage(page) {
+        const allPages = document.querySelectorAll('[data-page]');
 
-            document.querySelectorAll('.nav-item').forEach(item => {
-                item.classList.toggle(
-                    'active',
-                    item.dataset.page === page
-                );
-            });
+        allPages.forEach(element => {
+            const isActive = element.dataset.page === page;
 
-            const ratingSection = document.getElementById('ratingSection');
+            element.style.display = isActive ? '' : 'none';
 
-            if (ratingSection) {
-                ratingSection.style.display =
-                    page === 'rating' ? 'block' : 'none';
-            }
-
-            chessPanel.style.display =
-                page === 'games' ? 'block' : 'none';
-
-            if (page === 'rating' && ratingSection) {
-                ratingSection.scrollIntoView({
-                    behavior: 'smooth'
-                });
-            } else if (page === 'games') {
-                chessPanel.scrollIntoView({
-                    behavior: 'smooth'
-                });
-            } else {
-                showToast(labels[page] || page);
-            }
-
-            tg?.HapticFeedback?.selectionChanged();
+            element.classList.toggle('active', isActive);
         });
-    });
 
-    // ==========================================
-    // SETTINGS
-    // ==========================================
-
-    const settingsButton = document.getElementById('settings');
-
-    if (settingsButton) {
-        settingsButton.addEventListener('click', () => {
-            showToast('Настройки — добавим следующим этапом');
-        });
-    }
-
-    // ==========================================
-    // ELO LEADERBOARD
-    // ==========================================
-
-    async function loadPlayers() {
-        try {
-            const response = await fetch(API_URL + '/api/leaderboard');
-
-            if (!response.ok) {
-                throw new Error('HTTP ' + response.status);
-            }
-
-            const data = await response.json();
-            const ratingList = document.getElementById('ratingList');
-
-            if (!ratingList) return;
-
-            ratingList.innerHTML = '';
-
-            const players = Array.isArray(data.leaderboard)
-                ? data.leaderboard
-                : [];
-
-            players.forEach((player, index) => {
-                const card = document.createElement('div');
-                card.className = 'rating-player';
-
-                const name = player.first_name ||
-                    player.username ||
-                    'Игрок';
-
-                const place = document.createElement('div');
-                place.className = 'rating-place';
-                place.textContent = index + 1;
-
-                const info = document.createElement('div');
-                info.className = 'rating-info';
-
-                const playerName = document.createElement('strong');
-                playerName.textContent = name;
-
-                const playerUsername = document.createElement('small');
-                playerUsername.textContent = player.username
-                    ? '@' + player.username
-                    : 'Игрок REQUIEM';
-
-                const elo = document.createElement('strong');
-                elo.textContent = (player.elo ?? 1000) + ' ELO';
-                elo.style.color = '#ed2638';
-
-                info.appendChild(playerName);
-                info.appendChild(playerUsername);
-                info.appendChild(elo);
-
-                card.appendChild(place);
-                card.appendChild(info);
-
-                ratingList.appendChild(card);
-            });
-
-            if (players.length === 0) {
-                ratingList.textContent = 'Пока игроков нет';
-            }
-
-        } catch (error) {
-            console.error('REQUIEM RATING ERROR:', error);
+        if (page === 'games') {
+            chessPanel.style.display = 'block';
+        } else {
+            chessPanel.style.display = 'none';
         }
     }
+
+    document.querySelectorAll('[data-page]').forEach(element => {
+        element.addEventListener('click', () => {
+            const page = element.dataset.page;
+
+            if (!page) return;
+
+            showPage(page);
+
+            if (labels[page]) {
+                const pageTitle = document.getElementById('pageTitle');
+
+                if (pageTitle) {
+                    pageTitle.textContent = labels[page];
+                }
+            }
+        });
+    });
 
     // ==========================================
     // PLAYER REGISTRATION
     // ==========================================
 
     async function registerPlayer() {
-        if (!tg?.initData) {
-            console.warn('Открой REQUIEM через Telegram');
-            await loadPlayers();
-            return;
-        }
-
         try {
-            const response = await fetch(API_URL + '/api/register', {
+            const response = await fetch(`${API_URL}/api/register`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'X-Telegram-Init-Data': getTelegramInitData()
                 },
                 body: JSON.stringify({
-                    initData: tg.initData
+                    initData: getTelegramInitData()
                 })
             });
 
             if (!response.ok) {
-                throw new Error('HTTP ' + response.status);
+                console.warn('Player registration failed:', response.status);
             }
-
-            const result = await response.json();
-
-            console.log('REQUIEM REGISTRATION:', result);
-
-            await loadPlayers();
-
         } catch (error) {
-            console.error('REGISTRATION ERROR:', error);
-            await loadPlayers();
+            console.error('Registration error:', error);
         }
     }
 
+    // ==========================================
+    // LEADERBOARD
+    // ==========================================
+
+    async function loadLeaderboard() {
+        try {
+            const response = await fetch(`${API_URL}/api/leaderboard`);
+
+            if (!response.ok) {
+                throw new Error('Не удалось загрузить рейтинг');
+            }
+
+            const data = await response.json();
+
+            const leaderboard =
+                Array.isArray(data) ? data :
+                Array.isArray(data.players) ? data.players :
+                Array.isArray(data.leaderboard) ? data.leaderboard :
+                [];
+
+            const container =
+                document.getElementById('leaderboard') ||
+                document.getElementById('ratingList');
+
+            if (!container) return;
+
+            container.innerHTML = '';
+
+            if (leaderboard.length === 0) {
+                container.textContent = 'Пока нет игроков в рейтинге';
+                return;
+            }
+
+            leaderboard.forEach((player, index) => {
+                const item = document.createElement('div');
+
+                item.className = 'leaderboard-item';
+
+                const name = document.createElement('span');
+                name.textContent =
+                    player.name ||
+                    player.username ||
+                    player.first_name ||
+                    'Игрок';
+
+                const rating = document.createElement('span');
+                rating.textContent =
+                    `${player.elo ?? player.rating ?? 1000} ELO`;
+
+                const position = document.createElement('span');
+                position.textContent = `#${index + 1}`;
+
+                item.appendChild(position);
+                item.appendChild(name);
+                item.appendChild(rating);
+
+                container.appendChild(item);
+            });
+
+        } catch (error) {
+            console.error('Leaderboard error:', error);
+        }
+    }
+
+    // ==========================================
+    // INITIALIZATION
+    // ==========================================
+
     registerPlayer();
+    loadLeaderboard();
+
+    showChessLobby();
+
+    console.log('REQUIEM Mini App initialized');
+    console.log('REQUIEM Chess initialized');
+
 });
