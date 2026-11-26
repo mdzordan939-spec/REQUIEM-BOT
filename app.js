@@ -15,13 +15,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const user = tg?.initDataUnsafe?.user;
+
     const username = [
         user?.first_name,
         user?.last_name
     ].filter(Boolean).join(' ') || 'Игрок';
 
     const usernameElement = document.getElementById('username');
-    if (usernameElement) usernameElement.textContent = username;
+
+    if (usernameElement) {
+        usernameElement.textContent = username;
+    }
 
     const initData = () => tg?.initData || '';
 
@@ -55,9 +59,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let chessEnginePromise = null;
 
     function loadChessEngine() {
-        if (window.Chess) return Promise.resolve(true);
+        if (window.Chess) {
+            return Promise.resolve(true);
+        }
 
-        if (chessEnginePromise) return chessEnginePromise;
+        if (chessEnginePromise) {
+            return chessEnginePromise;
+        }
 
         chessEnginePromise = new Promise((resolve, reject) => {
             const script = document.createElement('script');
@@ -74,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             script.onerror = () => {
-                reject(new Error('Не удалось загрузить Chess.js'));
+                reject(new Error('Ошибка загрузки Chess.js'));
             };
 
             document.head.appendChild(script);
@@ -85,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     loadChessEngine().catch(error => {
         console.error(error);
-        showToast('Не загрузился расчёт шахматных ходов');
+        showToast('Не загрузились подсказки ходов');
     });
 
     // ==========================================
@@ -107,7 +115,9 @@ document.addEventListener('DOMContentLoaded', () => {
     ];
 
     function hideSections() {
-        homeElements.forEach(el => el.style.display = 'none');
+        homeElements.forEach(el => {
+            el.style.display = 'none';
+        });
 
         if (gamesHub) gamesHub.style.display = 'none';
         if (chessScreen) chessScreen.style.display = 'none';
@@ -130,7 +140,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (page === 'home') {
-            homeElements.forEach(el => el.style.display = '');
+            homeElements.forEach(el => {
+                el.style.display = '';
+            });
         }
 
         if (page === 'games' && gamesHub) {
@@ -171,6 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
             border:1px solid #40121d;
             border-radius:18px;
             box-sizing:border-box;
+            overflow:hidden;
         }
 
         #chessPanel * {
@@ -202,6 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
             border-radius:50%;
             color:#ed1735;
             font-size:25px;
+            box-shadow:0 0 15px rgba(237,23,53,.2);
         }
 
         .chess-brand span {
@@ -223,6 +237,14 @@ document.addEventListener('DOMContentLoaded', () => {
             border-radius:50%;
             background:#e51a36;
             box-shadow:0 0 9px #e51a36;
+            animation:onlinePulse 1.8s infinite;
+        }
+
+        @keyframes onlinePulse {
+            50% {
+                opacity:.35;
+                box-shadow:0 0 2px #e51a36;
+            }
         }
 
         .chess-layout {
@@ -328,8 +350,6 @@ document.addEventListener('DOMContentLoaded', () => {
             z-index:2;
         }
 
-        /* КРАСНЫЕ ТОЧКИ ДОСТУПНЫХ ХОДОВ */
-
         .chess-square.chess-legal::after {
             content:"";
             position:absolute;
@@ -344,8 +364,6 @@ document.addEventListener('DOMContentLoaded', () => {
             z-index:4;
             animation:legalAppear .18s ease-out both;
         }
-
-        /* КРАСНОЕ КОЛЬЦО ДЛЯ ВЗЯТИЯ */
 
         .chess-square.chess-capture::after {
             content:"";
@@ -382,12 +400,18 @@ document.addEventListener('DOMContentLoaded', () => {
             user-select:none;
             -webkit-user-drag:none;
             filter:drop-shadow(0 3px 3px rgba(0,0,0,.7));
-            transition:transform .12s ease;
             z-index:1;
+            transform:translate(0,0);
+            transition:
+                transform .32s cubic-bezier(.22,.75,.25,1),
+                filter .2s ease;
+            will-change:transform;
         }
 
         .chess-square.chess-selected .chess-piece-img {
-            transform:scale(1.08);
+            filter:
+                drop-shadow(0 0 7px rgba(255,20,60,.9))
+                drop-shadow(0 3px 3px rgba(0,0,0,.7));
         }
 
         .chess-coord {
@@ -484,6 +508,18 @@ document.addEventListener('DOMContentLoaded', () => {
             font-size:10px;
             font-weight:900;
             cursor:pointer;
+            transition:
+                background .2s ease,
+                transform .2s ease,
+                box-shadow .2s ease;
+        }
+
+        .chess-button:active {
+            transform:scale(.97);
+        }
+
+        .chess-button:hover {
+            box-shadow:0 0 14px rgba(237,23,53,.25);
         }
 
         .chess-button:disabled {
@@ -591,6 +627,243 @@ document.addEventListener('DOMContentLoaded', () => {
             font-weight:800;
         }
 
+        /* =====================================
+           VICTORY / DEFEAT OVERLAY
+        ===================================== */
+
+        #chessResult {
+            position:fixed;
+            inset:0;
+            z-index:99999;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            padding:20px;
+            background:rgba(0,0,0,.94);
+            opacity:0;
+            visibility:hidden;
+            pointer-events:none;
+            transition:
+                opacity .45s ease,
+                visibility .45s ease;
+            overflow:hidden;
+        }
+
+        #chessResult.active {
+            opacity:1;
+            visibility:visible;
+            pointer-events:auto;
+        }
+
+        .result-backdrop {
+            position:absolute;
+            inset:0;
+            background:
+                radial-gradient(
+                    circle at 50% 45%,
+                    rgba(220,0,40,.2),
+                    transparent 55%
+                );
+            animation:resultBackdrop 3s ease-in-out infinite;
+        }
+
+        @keyframes resultBackdrop {
+            50% {
+                opacity:.35;
+                transform:scale(1.15);
+            }
+        }
+
+        .result-content {
+            position:relative;
+            z-index:3;
+            width:min(100%,420px);
+            padding:35px 22px;
+            text-align:center;
+            transform:translateY(35px) scale(.88);
+            opacity:0;
+            transition:
+                transform .65s cubic-bezier(.16,1,.3,1),
+                opacity .5s ease;
+        }
+
+        #chessResult.active .result-content {
+            transform:translateY(0) scale(1);
+            opacity:1;
+        }
+
+        .result-symbol {
+            width:100px;
+            height:100px;
+            display:grid;
+            place-items:center;
+            margin:0 auto 25px;
+            border:2px solid #ed1735;
+            border-radius:50%;
+            color:#ff3153;
+            font-size:52px;
+            box-shadow:
+                0 0 20px rgba(237,23,53,.4),
+                inset 0 0 20px rgba(237,23,53,.12);
+            animation:resultSymbol 2s ease-in-out infinite;
+        }
+
+        @keyframes resultSymbol {
+            50% {
+                transform:scale(1.08);
+                box-shadow:
+                    0 0 45px rgba(237,23,53,.65),
+                    inset 0 0 25px rgba(237,23,53,.2);
+            }
+        }
+
+        .result-eyebrow {
+            margin-bottom:12px;
+            color:#aaa;
+            font-size:11px;
+            font-weight:900;
+            letter-spacing:6px;
+        }
+
+        .result-title {
+            margin:0;
+            color:#fff;
+            font-size:clamp(42px,11vw,70px);
+            font-weight:1000;
+            line-height:1;
+            letter-spacing:2px;
+            text-shadow:
+                0 0 10px rgba(255,0,45,.6),
+                0 0 35px rgba(255,0,45,.35);
+        }
+
+        .result-title.defeat {
+            color:#aeb0b6;
+            text-shadow:
+                0 0 10px rgba(150,150,150,.25),
+                0 0 30px rgba(255,0,45,.15);
+            animation:defeatGlitch 2.5s infinite;
+        }
+
+        @keyframes defeatGlitch {
+            0%,90%,100% {
+                transform:translateX(0);
+                opacity:1;
+            }
+            92% {
+                transform:translateX(-4px);
+                opacity:.7;
+            }
+            94% {
+                transform:translateX(4px);
+            }
+            96% {
+                transform:translateX(-2px);
+            }
+        }
+
+        .result-description {
+            margin:18px 0 28px;
+            color:#999;
+            font-size:13px;
+            line-height:1.6;
+        }
+
+        .result-button {
+            width:100%;
+            min-height:50px;
+            margin-top:9px;
+            border:1px solid #ed1735;
+            border-radius:9px;
+            background:#d71130;
+            color:white;
+            font-size:12px;
+            font-weight:900;
+            letter-spacing:2px;
+            cursor:pointer;
+            transition:transform .2s,box-shadow .2s;
+        }
+
+        .result-button:active {
+            transform:scale(.97);
+        }
+
+        .result-button.secondary {
+            background:transparent;
+            border-color:#4a2630;
+            color:#aaa;
+        }
+
+        .result-particles {
+            position:absolute;
+            inset:0;
+            overflow:hidden;
+            pointer-events:none;
+        }
+
+        .result-particle {
+            position:absolute;
+            bottom:-20px;
+            width:4px;
+            height:4px;
+            border-radius:50%;
+            background:#ff1744;
+            box-shadow:0 0 12px #ff1744;
+            animation:particleRise var(--duration) linear infinite;
+            animation-delay:var(--delay);
+            opacity:0;
+        }
+
+        @keyframes particleRise {
+            0% {
+                transform:translate3d(0,0,0) scale(.5);
+                opacity:0;
+            }
+            15% {
+                opacity:.9;
+            }
+            85% {
+                opacity:.5;
+            }
+            100% {
+                transform:translate3d(var(--drift),-110vh,0) scale(1.5);
+                opacity:0;
+            }
+        }
+
+        .result-flash {
+            position:absolute;
+            inset:0;
+            z-index:2;
+            pointer-events:none;
+            background:#ff1744;
+            opacity:0;
+        }
+
+        #chessResult.victory-flash .result-flash {
+            animation:victoryFlash .65s ease-out;
+        }
+
+        @keyframes victoryFlash {
+            0% { opacity:.65; }
+            100% { opacity:0; }
+        }
+
+        #chessResult.defeat-mode .result-backdrop {
+            background:
+                radial-gradient(
+                    circle at 50% 45%,
+                    rgba(100,0,15,.16),
+                    transparent 55%
+                );
+        }
+
+        #chessResult.draw-mode .result-symbol {
+            border-color:#777;
+            color:#ddd;
+            box-shadow:0 0 25px rgba(255,255,255,.15);
+        }
+
         @media(max-width:620px) {
             .chess-layout {
                 grid-template-columns:1fr;
@@ -613,6 +886,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
             .chess-sidebar .chess-card:last-child {
                 grid-column:auto;
+            }
+        }
+
+        @media(prefers-reduced-motion:reduce) {
+            #chessPanel *,
+            #chessResult *,
+            #chessResult {
+                animation-duration:.01ms !important;
+                transition-duration:.01ms !important;
             }
         }
     `;
@@ -734,6 +1016,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
 
     const chessPanel = document.createElement('section');
+
     chessPanel.id = 'chessPanel';
 
     chessPanel.innerHTML = `
@@ -858,6 +1141,145 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================
+    // RESULT OVERLAY
+    // ==========================================
+
+    const resultOverlay = document.createElement('div');
+
+    resultOverlay.id = 'chessResult';
+
+    resultOverlay.innerHTML = `
+        <div class="result-backdrop"></div>
+        <div class="result-flash"></div>
+        <div class="result-particles" id="resultParticles"></div>
+
+        <div class="result-content">
+            <div class="result-symbol" id="resultSymbol">♛</div>
+
+            <div class="result-eyebrow" id="resultEyebrow">
+                REQUIEM CHESS
+            </div>
+
+            <h1 class="result-title" id="resultTitle">
+                VICTORY
+            </h1>
+
+            <div class="result-description" id="resultDescription">
+                Партия завершена
+            </div>
+
+            <button class="result-button" id="resultLobby">
+                ВЕРНУТЬСЯ В ЛОББИ
+            </button>
+
+            <button class="result-button secondary" id="resultClose">
+                ПОСМОТРЕТЬ ДОСКУ
+            </button>
+        </div>
+    `;
+
+    document.body.appendChild(resultOverlay);
+
+    const resultTitle = document.getElementById('resultTitle');
+    const resultSymbol = document.getElementById('resultSymbol');
+    const resultEyebrow = document.getElementById('resultEyebrow');
+    const resultDescription = document.getElementById('resultDescription');
+    const resultParticles = document.getElementById('resultParticles');
+
+    let resultShown = false;
+
+    function createResultParticles() {
+        resultParticles.innerHTML = '';
+
+        for (let i = 0; i < 55; i++) {
+            const particle = document.createElement('span');
+
+            particle.className = 'result-particle';
+
+            particle.style.left = `${Math.random() * 100}%`;
+            particle.style.setProperty(
+                '--duration',
+                `${3 + Math.random() * 5}s`
+            );
+            particle.style.setProperty(
+                '--delay',
+                `${Math.random() * 4}s`
+            );
+            particle.style.setProperty(
+                '--drift',
+                `${Math.random() * 180 - 90}px`
+            );
+
+            resultParticles.appendChild(particle);
+        }
+    }
+
+    function showGameResult(type, result) {
+        if (resultShown) return;
+
+        resultShown = true;
+
+        resultOverlay.classList.remove(
+            'victory-flash',
+            'defeat-mode',
+            'draw-mode'
+        );
+
+        if (type === 'victory') {
+            resultTitle.textContent = 'VICTORY';
+            resultTitle.className = 'result-title';
+
+            resultSymbol.textContent = '♛';
+            resultEyebrow.textContent = 'THE CROWN IS YOURS';
+
+            resultDescription.textContent =
+                'Ты одержал победу. Эта партия войдёт в историю REQUIEM.';
+
+            resultOverlay.classList.add('victory-flash');
+        } else if (type === 'defeat') {
+            resultTitle.textContent = 'DEFEAT';
+            resultTitle.className = 'result-title defeat';
+
+            resultSymbol.textContent = '♟';
+            resultEyebrow.textContent = 'THE BATTLE IS OVER';
+
+            resultDescription.textContent =
+                'Сегодня соперник оказался сильнее. Следующая партия — новый шанс.';
+
+            resultOverlay.classList.add('defeat-mode');
+        } else {
+            resultTitle.textContent = 'DRAW';
+            resultTitle.className = 'result-title';
+
+            resultSymbol.textContent = '♙';
+            resultEyebrow.textContent = 'EQUAL WARRIORS';
+
+            resultDescription.textContent =
+                'Ничья. Ни один из игроков не уступил.';
+
+            resultOverlay.classList.add('draw-mode');
+        }
+
+        createResultParticles();
+
+        resultOverlay.classList.add('active');
+
+        if (tg?.HapticFeedback) {
+            if (type === 'victory') {
+                tg.HapticFeedback.notificationOccurred('success');
+            } else if (type === 'defeat') {
+                tg.HapticFeedback.notificationOccurred('error');
+            } else {
+                tg.HapticFeedback.notificationOccurred('warning');
+            }
+        }
+    }
+
+    function hideGameResult() {
+        resultOverlay.classList.remove('active');
+    }
+
+    // ==========================================
     // GAMES SCREEN
     // ==========================================
 
@@ -899,15 +1321,23 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentRoom = null;
     let playerColor = null;
     let currentFen = INITIAL_FEN;
+    let previousRenderedFen = null;
+
     let selectedSquare = null;
     let legalMoves = [];
+
     let gameFinished = false;
     let isMyTurn = false;
     let boardFlipped = false;
+
     let moveHistory = [];
+    let animationFrame = null;
+    let pendingMove = false;
 
     function setChessStatus(message) {
-        if (chessStatus) chessStatus.textContent = message;
+        if (chessStatus) {
+            chessStatus.textContent = message;
+        }
     }
 
     function showChessGame() {
@@ -959,6 +1389,118 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================
+    // MOVE ANIMATION HELPERS
+    // ==========================================
+
+    function getPieceMovements(oldFen, newFen) {
+        if (!oldFen || !newFen || oldFen === newFen) {
+            return [];
+        }
+
+        const oldBoard = parseFen(oldFen);
+        const newBoard = parseFen(newFen);
+
+        const removed = [];
+        const added = [];
+
+        for (let row = 0; row < 8; row++) {
+            for (let col = 0; col < 8; col++) {
+                const before = oldBoard[row]?.[col] || '';
+                const after = newBoard[row]?.[col] || '';
+
+                if (before === after) continue;
+
+                if (before) {
+                    removed.push({
+                        piece: before,
+                        row,
+                        col
+                    });
+                }
+
+                if (after) {
+                    added.push({
+                        piece: after,
+                        row,
+                        col
+                    });
+                }
+            }
+        }
+
+        const movements = [];
+
+        // Сначала сопоставляем одинаковые фигуры.
+        removed.forEach(source => {
+            let bestIndex = -1;
+            let bestDistance = Infinity;
+
+            added.forEach((target, index) => {
+                if (source.piece !== target.piece) return;
+
+                const distance =
+                    Math.abs(source.row - target.row) +
+                    Math.abs(source.col - target.col);
+
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    bestIndex = index;
+                }
+            });
+
+            if (bestIndex === -1) return;
+
+            const target = added.splice(bestIndex, 1)[0];
+
+            movements.push({
+                from: files[source.col] + (8 - source.row),
+                to: files[target.col] + (8 - target.row)
+            });
+        });
+
+        // Отдельно обрабатываем превращение пешки.
+        removed.forEach(source => {
+            if (!/[pP]/.test(source.piece)) return;
+
+            const alreadyMoved = movements.some(move =>
+                move.from === files[source.col] + (8 - source.row)
+            );
+
+            if (alreadyMoved) return;
+
+            const promotionRow =
+                source.piece === 'P' ? 0 : 7;
+
+            if (source.row !== promotionRow) return;
+
+            const targetIndex = added.findIndex(target =>
+                target.row === promotionRow
+            );
+
+            if (targetIndex === -1) return;
+
+            const target = added.splice(targetIndex, 1)[0];
+
+            movements.push({
+                from: files[source.col] + (8 - source.row),
+                to: files[target.col] + (8 - target.row)
+            });
+        });
+
+        return movements;
+    }
+
+    function getVisualPosition(square) {
+        const col = files.indexOf(square[0]);
+        const row = 8 - Number(square[1]);
+
+        return {
+            col: boardFlipped ? 7 - col : col,
+            row: boardFlipped ? 7 - row : row
+        };
+    }
+
+    // ==========================================
     // LEGAL MOVES
     // ==========================================
 
@@ -986,6 +1528,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderBoard() {
         if (!boardElement) return;
 
+        const oldFen = previousRenderedFen;
+
+        const movements = getPieceMovements(
+            oldFen,
+            currentFen
+        );
+
         const board = parseFen(currentFen);
 
         boardElement.innerHTML = '';
@@ -1006,8 +1555,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        const animatedPieces = [];
+
         coordinates.forEach(({ row, col }) => {
             const piece = board[row]?.[col] || '';
+
             const square = document.createElement('div');
 
             square.className = 'chess-square';
@@ -1049,6 +1601,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 image.draggable = false;
                 image.src = pieceImages[piece];
 
+                const movement = movements.find(
+                    item => item.to === name
+                );
+
+                if (movement) {
+                    const from = getVisualPosition(movement.from);
+                    const to = getVisualPosition(movement.to);
+
+                    const cellWidth = boardElement.clientWidth / 8;
+                    const cellHeight = boardElement.clientHeight / 8;
+
+                    const dx = (from.col - to.col) * cellWidth;
+                    const dy = (from.row - to.row) * cellHeight;
+
+                    image.style.transition = 'none';
+
+                    image.style.transform =
+                        `translate(${dx}px, ${dy}px)`;
+
+                    animatedPieces.push(image);
+                }
+
                 square.appendChild(image);
             }
 
@@ -1076,6 +1650,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
             boardElement.appendChild(square);
         });
+
+        if (animationFrame) {
+            cancelAnimationFrame(animationFrame);
+            animationFrame = null;
+        }
+
+        if (animatedPieces.length) {
+            // Применяем начальное положение до запуска перехода.
+            boardElement.offsetHeight;
+
+            animationFrame = requestAnimationFrame(() => {
+                animatedPieces.forEach(image => {
+                    image.style.transition =
+                        'transform .32s cubic-bezier(.22,.75,.25,1)';
+
+                    image.style.transform = 'translate(0,0)';
+                });
+            });
+        }
+
+        previousRenderedFen = currentFen;
     }
 
     // ==========================================
@@ -1088,8 +1683,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        if (gameFinished) {
-            showToast('Партия завершена');
+        if (gameFinished || pendingMove) {
             return;
         }
 
@@ -1099,12 +1693,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const board = parseFen(currentFen);
+
         const col = files.indexOf(square[0]);
         const row = 8 - Number(square[1]);
 
         const clickedPiece = board[row]?.[col] || '';
-
-        // Выбор своей фигуры
 
         if (!selectedSquare) {
             if (!clickedPiece || !isOwnPiece(clickedPiece)) {
@@ -1115,14 +1708,11 @@ document.addEventListener('DOMContentLoaded', () => {
             selectedSquare = square;
             legalMoves = await getLegalMoves(square);
 
-            // Проверяем, что позиция не изменилась
             if (selectedSquare !== square) return;
 
             renderBoard();
             return;
         }
-
-        // Повторное нажатие — отмена выбора
 
         if (selectedSquare === square) {
             selectedSquare = null;
@@ -1131,8 +1721,6 @@ document.addEventListener('DOMContentLoaded', () => {
             renderBoard();
             return;
         }
-
-        // Выбор другой своей фигуры
 
         if (clickedPiece && isOwnPiece(clickedPiece)) {
             selectedSquare = square;
@@ -1143,8 +1731,6 @@ document.addEventListener('DOMContentLoaded', () => {
             renderBoard();
             return;
         }
-
-        // Проверка легального хода
 
         const availableMove = legalMoves.find(
             move => move.to === square
@@ -1157,21 +1743,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let moveString = selectedSquare + square;
 
-        // Автоматическое превращение пешки в ферзя
-
         if (availableMove.flags.includes('p')) {
             moveString += 'q';
         }
 
         selectedSquare = null;
         legalMoves = [];
+        pendingMove = true;
 
         renderBoard();
 
-        socket.send(JSON.stringify({
-            type: 'move',
-            move: moveString
-        }));
+        try {
+            socket.send(JSON.stringify({
+                type: 'move',
+                move: moveString
+            }));
+        } catch (error) {
+            console.error(error);
+            pendingMove = false;
+            showToast('Не удалось отправить ход');
+        }
     }
 
     // ==========================================
@@ -1200,6 +1791,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             chessMoves.appendChild(line);
         });
+
+        chessMoves.scrollTop = chessMoves.scrollHeight;
     }
 
     // ==========================================
@@ -1207,6 +1800,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
 
     function connectToRoom(room) {
+        hideGameResult();
+        resultShown = false;
+
         if (socket) {
             socket.onclose = null;
             socket.close();
@@ -1221,6 +1817,8 @@ document.addEventListener('DOMContentLoaded', () => {
         isMyTurn = false;
         boardFlipped = false;
         currentFen = INITIAL_FEN;
+        previousRenderedFen = null;
+        pendingMove = false;
 
         if (chessRoomCode) {
             chessRoomCode.textContent = room;
@@ -1305,6 +1903,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     ['w', 'white'].includes(turn)) ||
                 (playerColor === 'black' &&
                     ['b', 'black'].includes(turn));
+
+            pendingMove = false;
         }
 
         if (data.move) {
@@ -1318,15 +1918,40 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data.game_over) {
             gameFinished = true;
             isMyTurn = false;
+            pendingMove = false;
 
-            if (data.result === '1-0') {
+            const redWon = data.result === '1-0';
+            const blackWon = data.result === '0-1';
+
+            if (redWon) {
                 setChessStatus('Победа красных');
-            } else if (data.result === '0-1') {
+            } else if (blackWon) {
                 setChessStatus('Победа чёрных');
             } else {
                 setChessStatus('Ничья');
             }
-        } else if (isMyTurn) {
+
+            let resultType = 'draw';
+
+            if (redWon || blackWon) {
+                const iWon =
+                    (redWon && playerColor === 'white') ||
+                    (blackWon && playerColor === 'black');
+
+                resultType = iWon ? 'victory' : 'defeat';
+            }
+
+            selectedSquare = null;
+            legalMoves = [];
+
+            renderBoard();
+
+            showGameResult(resultType, data.result);
+
+            return;
+        }
+
+        if (isMyTurn) {
             setChessStatus('Ваш ход');
         } else {
             setChessStatus('Ход соперника');
@@ -1381,6 +2006,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             connectToRoom(String(room).toUpperCase());
+
             showToast('Комната создана');
 
         } catch (error) {
@@ -1452,6 +2078,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
 
     function leaveChessGame() {
+        hideGameResult();
+
         if (socket) {
             socket.onclose = null;
             socket.close();
@@ -1466,13 +2094,32 @@ document.addEventListener('DOMContentLoaded', () => {
         isMyTurn = false;
         boardFlipped = false;
         currentFen = INITIAL_FEN;
+        previousRenderedFen = null;
+        pendingMove = false;
+        resultShown = false;
 
         resetMoveHistory();
         showChessLobby();
         setChessStatus('Ожидание подключения');
 
+        renderBoard();
+
         showToast('Ты вышел из партии');
     }
+
+    // ==========================================
+    // RESULT BUTTONS
+    // ==========================================
+
+    document.getElementById('resultLobby')
+        .addEventListener('click', () => {
+            leaveChessGame();
+        });
+
+    document.getElementById('resultClose')
+        .addEventListener('click', () => {
+            hideGameResult();
+        });
 
     // ==========================================
     // BUTTONS
@@ -1561,12 +2208,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
             players.forEach((player, index) => {
                 const item = document.createElement('div');
+
                 item.className = 'leaderboard-item';
 
                 const position = document.createElement('span');
                 position.textContent = `#${index + 1}`;
 
                 const name = document.createElement('span');
+
                 name.textContent =
                     player.name ||
                     player.username ||
@@ -1574,10 +2223,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     'Игрок';
 
                 const rating = document.createElement('span');
+
                 rating.textContent =
                     `${player.elo ?? player.rating ?? 1000} ELO`;
 
                 item.append(position, name, rating);
+
                 container.appendChild(item);
             });
         } catch (error) {
