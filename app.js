@@ -1,6 +1,7 @@
+
 document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
-    // REQUIEM — CONFIGURATION
+    // REQUIEM CONFIG
     // ==========================================
 
     const tg = window.Telegram?.WebApp;
@@ -14,20 +15,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const user = tg?.initDataUnsafe?.user;
-
     const username = [
         user?.first_name,
         user?.last_name
     ].filter(Boolean).join(' ') || 'Игрок';
 
     const usernameElement = document.getElementById('username');
-
-    if (usernameElement) {
-        usernameElement.textContent = username;
-    }
+    if (usernameElement) usernameElement.textContent = username;
 
     const toast = document.getElementById('toast');
-    let toastTimer = null;
+    let toastTimer;
 
     function showToast(message) {
         if (!toast) return;
@@ -36,15 +33,12 @@ document.addEventListener('DOMContentLoaded', () => {
         toast.classList.add('show');
 
         clearTimeout(toastTimer);
-
         toastTimer = setTimeout(() => {
             toast.classList.remove('show');
         }, 2400);
     }
 
-    function getTelegramInitData() {
-        return tg?.initData || '';
-    }
+    const initData = () => tg?.initData || '';
 
     // ==========================================
     // NAVIGATION
@@ -59,24 +53,11 @@ document.addEventListener('DOMContentLoaded', () => {
         ...document.querySelectorAll('.profile'),
         ...document.querySelectorAll('.stats'),
         ...document.querySelectorAll('.menu'),
-        ...Array.from(
-            document.querySelectorAll('.section-heading')
-        ).slice(0, 2)
+        ...Array.from(document.querySelectorAll('.section-heading')).slice(0, 2)
     ];
 
-    const labels = {
-        home: 'Главная',
-        collection: 'Коллекция',
-        games: 'Игры',
-        rating: 'Рейтинг',
-        tasks: 'Задания',
-        profile: 'Профиль'
-    };
-
-    function hideAllSections() {
-        homeElements.forEach(element => {
-            element.style.display = 'none';
-        });
+    function hideSections() {
+        homeElements.forEach(el => el.style.display = 'none');
 
         if (gamesHub) gamesHub.style.display = 'none';
         if (chessScreen) chessScreen.style.display = 'none';
@@ -89,19 +70,14 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        hideAllSections();
+        hideSections();
 
         document.querySelectorAll('.nav-item').forEach(button => {
-            button.classList.toggle(
-                'active',
-                button.dataset.page === page
-            );
+            button.classList.toggle('active', button.dataset.page === page);
         });
 
         if (page === 'home') {
-            homeElements.forEach(element => {
-                element.style.display = '';
-            });
+            homeElements.forEach(el => el.style.display = '');
         }
 
         if (page === 'games' && gamesHub) {
@@ -111,537 +87,516 @@ document.addEventListener('DOMContentLoaded', () => {
         if (page === 'rating' && ratingSection) {
             ratingSection.style.display = 'block';
         }
-
-        const pageTitle = document.getElementById('pageTitle');
-
-        if (pageTitle && labels[page]) {
-            pageTitle.textContent = labels[page];
-        }
     }
 
-    document.querySelectorAll('[data-page]').forEach(element => {
-        element.addEventListener('click', () => {
-            showPage(element.dataset.page);
+    document.querySelectorAll('[data-page]').forEach(button => {
+        button.addEventListener('click', () => {
+            showPage(button.dataset.page);
         });
     });
 
     // ==========================================
-    // CHESS STYLES
+    // CHESS DESIGN
     // ==========================================
 
-    const chessStyle = document.createElement('style');
+    const style = document.createElement('style');
 
-    chessStyle.textContent = `
+    style.textContent = `
         #chessPanel {
-            display: none;
-            position: relative;
-            z-index: 2;
-            width: 100%;
-            margin: 14px 0 24px;
-            padding: 16px;
-            overflow: hidden;
-            color: #f3eeee;
+            display:none;
+            width:100%;
+            margin:14px 0 24px;
+            padding:14px;
+            color:#fff;
             background:
-                radial-gradient(
-                    ellipse at 50% 0%,
-                    rgba(150, 0, 30, .2),
-                    transparent 58%
-                ),
+                radial-gradient(ellipse at 50% 0%,rgba(180,0,35,.18),transparent 60%),
                 #080808;
-            border: 1px solid #40121d;
-            border-radius: 18px;
-            box-sizing: border-box;
+            border:1px solid #40121d;
+            border-radius:18px;
+            box-sizing:border-box;
         }
 
-        #chessPanel * {
-            box-sizing: border-box;
-        }
+        #chessPanel * { box-sizing:border-box; }
 
         .chess-heading {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 20px;
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            margin-bottom:18px;
         }
 
         .chess-brand {
-            display: flex;
-            align-items: center;
-            gap: 11px;
-            font-size: 19px;
-            font-weight: 900;
-            letter-spacing: 1.5px;
+            display:flex;
+            align-items:center;
+            gap:10px;
+            font-size:18px;
+            font-weight:900;
+            letter-spacing:1px;
         }
 
         .chess-brand-mark {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 40px;
-            height: 40px;
-            flex: 0 0 40px;
-            border: 1px solid #ed1735;
-            border-radius: 50%;
-            color: #ed1735;
-            font-size: 25px;
-            font-style: italic;
-            box-shadow: 0 0 15px rgba(237, 23, 53, .15);
+            width:40px;
+            height:40px;
+            display:grid;
+            place-items:center;
+            border:1px solid #ed1735;
+            border-radius:50%;
+            color:#ed1735;
+            font-size:25px;
         }
 
-        .chess-brand span {
-            color: #ed1735;
-        }
+        .chess-brand span { color:#ed1735; }
 
         .chess-online {
-            display: flex;
-            align-items: center;
-            gap: 7px;
-            color: #aaa;
-            font-size: 10px;
-            letter-spacing: 1px;
+            display:flex;
+            align-items:center;
+            gap:7px;
+            color:#aaa;
+            font-size:10px;
+            letter-spacing:1px;
         }
 
         .chess-online-dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: #e51a36;
-            box-shadow: 0 0 9px #e51a36;
+            width:7px;
+            height:7px;
+            border-radius:50%;
+            background:#e51a36;
+            box-shadow:0 0 9px #e51a36;
         }
 
         .chess-layout {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) 190px;
-            gap: 16px;
-            align-items: start;
+            display:grid;
+            grid-template-columns:minmax(0,1fr) 180px;
+            gap:14px;
+            align-items:start;
         }
 
-        .chess-main {
-            min-width: 0;
-        }
+        .chess-main { min-width:0; }
 
         .chess-player {
-            display: flex;
-            align-items: center;
-            gap: 11px;
-            min-width: 0;
-            padding: 11px;
-            margin-bottom: 10px;
-            background: linear-gradient(110deg, #1a1013, #0d0d0d);
-            border: 1px solid #3b1720;
-            border-radius: 12px;
+            display:flex;
+            align-items:center;
+            gap:10px;
+            padding:10px;
+            margin-bottom:10px;
+            background:#151012;
+            border:1px solid #39151e;
+            border-radius:11px;
         }
 
         .chess-player-avatar {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex: 0 0 43px;
-            width: 43px;
-            height: 43px;
-            border: 1px solid #8e1025;
-            border-radius: 50%;
-            color: #ed1735;
-            font-size: 25px;
-            background: #10090b;
+            width:40px;
+            height:40px;
+            flex:0 0 40px;
+            display:grid;
+            place-items:center;
+            border:1px solid #8e1025;
+            border-radius:50%;
+            color:#ed1735;
+            font-size:22px;
         }
 
-        .chess-player-info {
-            min-width: 0;
-            flex: 1;
-        }
+        .chess-player-info { min-width:0; flex:1; }
 
         .chess-player-name {
-            overflow: hidden;
-            color: #eee;
-            font-size: 14px;
-            font-weight: 800;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            overflow:hidden;
+            font-size:13px;
+            font-weight:800;
+            text-overflow:ellipsis;
+            white-space:nowrap;
         }
 
         .chess-player-rank {
-            margin-top: 4px;
-            color: #858080;
-            font-size: 11px;
+            margin-top:4px;
+            color:#888;
+            font-size:10px;
         }
 
         .chess-player-side {
-            color: #ed1b3c;
-            font-size: 10px;
-            font-weight: 900;
-            letter-spacing: 1px;
-            white-space: nowrap;
+            color:#ed1735;
+            font-size:10px;
+            font-weight:900;
         }
 
         .chess-board-frame {
-            width: 100%;
-            padding: 6px;
-            border: 2px solid #e71937;
-            border-radius: 10px;
-            background: #090909;
-            box-shadow:
-                0 0 9px rgba(235, 15, 45, .55),
-                0 0 28px rgba(235, 15, 45, .14);
+            width:100%;
+            padding:5px;
+            border:2px solid #e71937;
+            border-radius:9px;
+            background:#080808;
+            box-shadow:0 0 15px rgba(235,15,45,.22);
         }
 
         #chessBoard {
-            display: grid;
-            grid-template-columns: repeat(8, minmax(0, 1fr));
-            width: 100%;
-            aspect-ratio: 1;
-            overflow: hidden;
-            border-radius: 3px;
+            display:grid;
+            grid-template-columns:repeat(8,minmax(0,1fr));
+            width:100%;
+            aspect-ratio:1;
+            overflow:hidden;
         }
 
         .chess-square {
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 0;
-            aspect-ratio: 1;
-            cursor: pointer;
-            user-select: none;
-            -webkit-tap-highlight-color: transparent;
+            position:relative;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            min-width:0;
+            aspect-ratio:1;
+            cursor:pointer;
+            user-select:none;
+            -webkit-tap-highlight-color:transparent;
         }
 
-        .chess-light {
-            background: #761024;
-        }
-
-        .chess-dark {
-            background: #100d0e;
-        }
+        .chess-light { background:#741329; }
+        .chess-dark { background:#100d0e; }
 
         .chess-square.chess-selected {
-            z-index: 1;
-            outline: 3px solid #ff3153;
-            outline-offset: -3px;
-            background: #b20e30;
+            outline:3px solid #ff3153;
+            outline-offset:-3px;
+            background:#b20e30;
+            z-index:2;
         }
 
-        .chess-square:active {
-            filter: brightness(1.25);
+        /* НАСТОЯЩИЕ ИЗОБРАЖЕНИЯ ФИГУР */
+
+        .chess-piece-img {
+            display:block;
+            width:92%;
+            height:92%;
+            object-fit:contain;
+            pointer-events:none;
+            user-select:none;
+            -webkit-user-drag:none;
+            filter:drop-shadow(0 3px 3px rgba(0,0,0,.7));
+            transition:transform .12s ease;
         }
 
-        /* ФИГУРЫ */
-
-        .chess-piece {
-            display: block;
-            position: relative;
-            z-index: 1;
-            font-family:
-                "DejaVu Sans",
-                "Segoe UI Symbol",
-                "Arial Unicode MS",
-                serif;
-            font-size: clamp(32px, 8vw, 58px);
-            line-height: 1;
-            text-align: center;
-            pointer-events: none;
-            transform: scale(1.2);
-            transform-origin: center;
-            filter: drop-shadow(0 3px 3px #000);
-        }
-
-        .chess-white-piece {
-            color: #ff1744;
-            -webkit-text-stroke: .7px #ffd0d8;
-            text-shadow:
-                0 0 4px #ff8a9b,
-                0 0 10px rgba(255, 0, 40, .9),
-                0 0 18px rgba(255, 0, 40, .55);
-        }
-
-        .chess-black-piece {
-            color: #171717;
-            -webkit-text-stroke: 2px #e6e6e6;
-            text-shadow:
-                0 0 3px #fff,
-                0 0 8px rgba(255, 255, 255, .8),
-                0 3px 4px #000;
-        }
-
-        .chess-black-pawn {
-            transform: scale(1.42);
-            -webkit-text-stroke: 2.2px #f0f0f0;
+        .chess-square.chess-selected .chess-piece-img {
+            transform:scale(1.08);
         }
 
         .chess-coord {
-            position: absolute;
-            z-index: 2;
-            color: rgba(255, 255, 255, .7);
-            font-size: 9px;
-            font-weight: 700;
-            line-height: 1;
-            pointer-events: none;
+            position:absolute;
+            z-index:3;
+            color:rgba(255,255,255,.65);
+            font-size:8px;
+            font-weight:800;
+            pointer-events:none;
         }
 
-        .chess-coord-rank {
-            top: 3px;
-            left: 4px;
-        }
-
-        .chess-coord-file {
-            right: 4px;
-            bottom: 3px;
-        }
+        .chess-coord-rank { top:3px; left:4px; }
+        .chess-coord-file { right:4px; bottom:3px; }
 
         .chess-status {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            padding: 12px;
-            margin-top: 12px;
-            background: #111;
-            border: 1px solid #302027;
-            border-radius: 10px;
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:8px;
+            padding:12px;
+            margin-top:11px;
+            background:#111;
+            border:1px solid #302027;
+            border-radius:9px;
         }
 
         .chess-status-label {
-            color: #888;
-            font-size: 10px;
-            letter-spacing: 1px;
-            text-transform: uppercase;
+            color:#888;
+            font-size:10px;
+            text-transform:uppercase;
         }
 
         #chessStatus {
-            color: #f0203e;
-            font-size: 12px;
-            font-weight: 900;
-            text-align: right;
+            color:#f0203e;
+            font-size:12px;
+            font-weight:900;
+            text-align:right;
         }
 
         .chess-sidebar {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            min-width: 0;
+            display:flex;
+            flex-direction:column;
+            gap:10px;
         }
 
         .chess-card {
-            padding: 13px;
-            background: linear-gradient(145deg, #191114, #0c0c0c);
-            border: 1px solid #3b1720;
-            border-radius: 12px;
+            padding:12px;
+            background:#151012;
+            border:1px solid #39151e;
+            border-radius:11px;
         }
 
         .chess-card-title {
-            margin-bottom: 10px;
-            color: #e51a37;
-            font-size: 11px;
-            font-weight: 900;
-            letter-spacing: 1px;
-            text-transform: uppercase;
+            margin-bottom:10px;
+            color:#e51a37;
+            font-size:10px;
+            font-weight:900;
+            letter-spacing:1px;
+            text-transform:uppercase;
         }
 
         .chess-room-code {
-            color: #fff;
-            font-size: 19px;
-            font-weight: 900;
-            letter-spacing: 3px;
-            text-align: center;
-            overflow-wrap: anywhere;
+            color:#fff;
+            font-size:19px;
+            font-weight:900;
+            letter-spacing:3px;
+            text-align:center;
         }
 
         .chess-room-hint {
-            margin-top: 7px;
-            color: #888;
-            font-size: 10px;
-            line-height: 1.5;
-            text-align: center;
+            margin-top:7px;
+            color:#888;
+            font-size:10px;
+            line-height:1.5;
+            text-align:center;
         }
 
         .chess-button {
-            width: 100%;
-            min-height: 43px;
-            padding: 12px;
-            margin-top: 8px;
-            border: 1px solid #ed1735;
-            border-radius: 9px;
-            background: #d71130;
-            color: #fff;
-            font-size: 11px;
-            font-weight: 900;
-            letter-spacing: .7px;
-            cursor: pointer;
-            transition: background .15s, transform .15s;
-        }
-
-        .chess-button:active {
-            transform: scale(.98);
-            background: #a90d25;
+            width:100%;
+            min-height:42px;
+            padding:11px;
+            margin-top:8px;
+            border:1px solid #ed1735;
+            border-radius:8px;
+            background:#d71130;
+            color:#fff;
+            font-size:10px;
+            font-weight:900;
+            cursor:pointer;
         }
 
         .chess-button:disabled {
-            opacity: .6;
-            cursor: wait;
+            opacity:.55;
+            cursor:wait;
         }
 
         .chess-button-secondary {
-            background: #151112;
-            border-color: #49202a;
-            color: #ddd;
+            background:#171214;
+            border-color:#49202a;
+            color:#ddd;
         }
 
         #chessCode {
-            width: 100%;
-            min-height: 43px;
-            padding: 10px;
-            margin-top: 9px;
-            border: 1px solid #45202a;
-            border-radius: 8px;
-            outline: none;
-            background: #080808;
-            color: #fff;
-            font-size: 16px;
-            font-weight: 900;
-            letter-spacing: 3px;
-            text-align: center;
-        }
-
-        #chessCode:focus {
-            border-color: #ed1735;
-            box-shadow: 0 0 12px rgba(237, 23, 53, .15);
+            width:100%;
+            min-height:42px;
+            padding:10px;
+            margin-top:9px;
+            border:1px solid #45202a;
+            border-radius:8px;
+            outline:none;
+            background:#080808;
+            color:#fff;
+            font-size:16px;
+            font-weight:900;
+            letter-spacing:3px;
+            text-align:center;
         }
 
         .chess-moves {
-            min-height: 55px;
-            max-height: 160px;
-            overflow-y: auto;
-            color: #aaa;
-            font-size: 12px;
-            line-height: 1.8;
+            min-height:50px;
+            max-height:150px;
+            overflow-y:auto;
+            color:#aaa;
+            font-size:11px;
+            line-height:1.8;
         }
 
-        .chess-move-empty {
-            color: #666;
-            font-size: 11px;
-        }
+        .chess-move-empty { color:#666; }
 
         #chessLobby {
-            max-width: 460px;
-            margin: 0 auto;
-            padding: 12px 0 4px;
+            max-width:440px;
+            margin:auto;
+            padding:12px 0;
         }
 
         .chess-lobby-title {
-            margin: 0 0 8px;
-            color: #fff;
-            font-size: 22px;
-            font-weight: 900;
-            text-align: center;
+            margin:0 0 8px;
+            font-size:22px;
+            font-weight:900;
+            text-align:center;
         }
 
         .chess-lobby-subtitle {
-            margin-bottom: 20px;
-            color: #888;
-            font-size: 12px;
-            line-height: 1.5;
-            text-align: center;
+            margin-bottom:20px;
+            color:#888;
+            font-size:12px;
+            text-align:center;
         }
 
         .chess-divider {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin: 13px 0;
-            color: #777;
-            font-size: 10px;
-            letter-spacing: 2px;
+            display:flex;
+            align-items:center;
+            gap:12px;
+            margin:14px 0;
+            color:#777;
+            font-size:10px;
+            letter-spacing:2px;
         }
 
-        .chess-divider::before,
-        .chess-divider::after {
-            content: "";
-            height: 1px;
-            flex: 1;
-            background: #382027;
+        .chess-divider:before,
+        .chess-divider:after {
+            content:"";
+            flex:1;
+            height:1px;
+            background:#382027;
         }
 
         .leaderboard-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 13px;
-            margin-top: 9px;
-            background: #121010;
-            border: 1px solid #302027;
-            border-radius: 10px;
-            color: #eee;
-            font-size: 13px;
+            display:flex;
+            align-items:center;
+            gap:12px;
+            padding:13px;
+            margin-top:9px;
+            background:#121010;
+            border:1px solid #302027;
+            border-radius:10px;
+            color:#eee;
+            font-size:13px;
         }
 
         .leaderboard-item span:first-child {
-            color: #ed1735;
-            font-weight: 900;
+            color:#ed1735;
+            font-weight:900;
         }
 
-        .leaderboard-item span:nth-child(2) {
-            flex: 1;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
+        .leaderboard-item span:nth-child(2) { flex:1; }
         .leaderboard-item span:last-child {
-            color: #aaa;
-            font-weight: 800;
+            color:#aaa;
+            font-weight:800;
         }
 
-        @media (max-width: 620px) {
-            #chessPanel {
-                padding: 12px;
-            }
-
-            .chess-layout {
-                grid-template-columns: 1fr;
-            }
-
+        @media(max-width:620px) {
+            .chess-layout { grid-template-columns:1fr; }
             .chess-sidebar {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
+                display:grid;
+                grid-template-columns:1fr 1fr;
             }
-
             .chess-sidebar .chess-card:last-child {
-                grid-column: 1 / -1;
-            }
-
-            .chess-brand {
-                font-size: 16px;
-            }
-
-            .chess-player {
-                padding: 9px;
-            }
-
-            .chess-piece {
-                font-size: clamp(29px, 9vw, 50px);
+                grid-column:1/-1;
             }
         }
 
-        @media (max-width: 360px) {
-            .chess-sidebar {
-                grid-template-columns: 1fr;
-            }
-
+        @media(max-width:360px) {
+            .chess-sidebar { grid-template-columns:1fr; }
             .chess-sidebar .chess-card:last-child {
-                grid-column: auto;
-            }
-
-            .chess-piece {
-                font-size: clamp(24px, 8.5vw, 38px);
+                grid-column:auto;
             }
         }
     `;
 
-    document.head.appendChild(chessStyle);
+    document.head.appendChild(style);
 
     // ==========================================
-    // CHESS INTERFACE
+    // SVG CHESS PIECES
+    // ==========================================
+
+    function makePieceSVG(type, color) {
+        const red = color === 'red';
+
+        const main = red ? '#d90032' : '#17191d';
+        const light = red ? '#ff526e' : '#858b96';
+        const dark = red ? '#650016' : '#030405';
+        const outline = red ? '#ff9aaa' : '#d1d5dc';
+
+        const shapes = {
+            P: `
+                <path d="M50 12 C38 12 32 22 35 33 C37 41 43 44 43 47
+                L31 72 Q25 79 25 86 L75 86 Q75 79 69 72 L57 47
+                C57 44 63 41 65 33 C68 22 62 12 50 12Z"/>
+                <path d="M24 87 Q50 80 76 87 L82 94 Q50 101 18 94Z"/>
+            `,
+            R: `
+                <path d="M20 12 H35 V22 H43 V12 H57 V22 H65 V12 H80
+                V36 H73 L68 73 H32 L27 36 H20Z"/>
+                <path d="M28 42 H72 L76 77 H24Z"/>
+                <path d="M20 78 H80 V88 H20Z"/>
+                <path d="M14 89 H86 V96 H14Z"/>
+            `,
+            N: `
+                <path d="M22 78 Q34 69 33 57 Q24 44 29 30
+                Q33 16 47 12 Q43 27 53 30
+                Q68 31 73 47 Q81 66 70 78Z"/>
+                <path d="M32 79 H70 L80 91 H20Z"/>
+                <circle cx="56" cy="29" r="3" fill="${outline}" stroke="none"/>
+                <path d="M30 45 Q45 43 53 51" fill="none" stroke="${outline}" stroke-width="3"/>
+            `,
+            B: `
+                <path d="M50 10 C37 10 32 22 38 34
+                C41 42 46 48 46 57 L30 78 H70 L54 57
+                C54 48 59 42 62 34 C68 22 63 10 50 10Z"/>
+                <path d="M30 79 H70 L78 88 H22Z"/>
+                <path d="M16 90 H84 V97 H16Z"/>
+                <path d="M42 20 L58 37" stroke="${outline}" stroke-width="4" fill="none"/>
+            `,
+            Q: `
+                <path d="M20 29 L31 60 L69 60 L80 29
+                L69 39 L60 20 L50 39 L40 20 L31 39Z"/>
+                <circle cx="20" cy="25" r="6"/>
+                <circle cx="40" cy="17" r="6"/>
+                <circle cx="60" cy="17" r="6"/>
+                <circle cx="80" cy="25" r="6"/>
+                <path d="M29 63 H71 L76 80 H24Z"/>
+                <path d="M18 82 H82 V91 H18Z"/>
+                <path d="M13 92 H87 V98 H13Z"/>
+            `,
+            K: `
+                <path d="M45 8 H55 V23 H68 V33 H55 V45
+                Q57 56 70 70 H30 Q43 56 45 45 V33 H32 V23 H45Z"/>
+                <path d="M29 72 H71 L78 84 H22Z"/>
+                <path d="M15 87 H85 V96 H15Z"/>
+                <path d="M50 2 V15 M43 8 H57"
+                stroke="${outline}" stroke-width="4" fill="none"/>
+            `
+        };
+
+        const svg = `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 viewBox="0 0 100 104">
+                <defs>
+                    <linearGradient id="body" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0" stop-color="${light}"/>
+                        <stop offset=".35" stop-color="${main}"/>
+                        <stop offset="1" stop-color="${dark}"/>
+                    </linearGradient>
+                    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0" stop-color="${light}"/>
+                        <stop offset=".5" stop-color="${main}"/>
+                        <stop offset="1" stop-color="${dark}"/>
+                    </linearGradient>
+                    <filter id="shadow" x="-30%" y="-30%" width="160%" height="170%">
+                        <feGaussianBlur in="SourceAlpha" stdDeviation="2.5"/>
+                        <feOffset dy="3"/>
+                        <feComponentTransfer>
+                            <feFuncA type="linear" slope=".55"/>
+                        </feComponentTransfer>
+                        <feMerge>
+                            <feMergeNode/>
+                            <feMergeNode in="SourceGraphic"/>
+                        </feMerge>
+                    </filter>
+                </defs>
+
+                <g filter="url(#shadow)"
+                   fill="url(#body)"
+                   stroke="${outline}"
+                   stroke-width="2.2"
+                   stroke-linejoin="round">
+                    ${shapes[type]}
+                </g>
+            </svg>
+        `;
+
+        return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+    }
+
+    const pieceImages = {};
+
+    ['K', 'Q', 'R', 'B', 'N', 'P'].forEach(type => {
+        pieceImages[type] = makePieceSVG(type, 'red');
+        pieceImages[type.toLowerCase()] = makePieceSVG(type, 'black');
+    });
+
+    // ==========================================
+    // CHESS HTML
     // ==========================================
 
     const chessPanel = document.createElement('section');
@@ -653,7 +608,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="chess-brand-mark">R</div>
                 <div>REQUIEM <span>CHESS</span></div>
             </div>
-
             <div class="chess-online">
                 <span class="chess-online-dot"></span>
                 ONLINE
@@ -662,29 +616,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         <div id="chessLobby">
             <h2 class="chess-lobby-title">ШАХМАТНАЯ АРЕНА</h2>
-
             <div class="chess-lobby-subtitle">
                 Создай комнату или присоединись к сопернику
             </div>
-
             <button class="chess-button" id="createChess">
                 СОЗДАТЬ КОМНАТУ
             </button>
-
             <div class="chess-divider">ИЛИ</div>
-
-            <input
-                id="chessCode"
-                maxlength="6"
-                placeholder="КОД КОМНАТЫ"
-                autocomplete="off"
-                spellcheck="false"
-            >
-
-            <button
-                class="chess-button chess-button-secondary"
-                id="joinChess"
-            >
+            <input id="chessCode" maxlength="6"
+                   placeholder="КОД КОМНАТЫ"
+                   autocomplete="off">
+            <button class="chess-button chess-button-secondary"
+                    id="joinChess">
                 ПРИСОЕДИНИТЬСЯ
             </button>
         </div>
@@ -692,69 +635,39 @@ document.addEventListener('DOMContentLoaded', () => {
         <div id="chessGame" style="display:none">
             <div class="chess-layout">
                 <div class="chess-main">
-
                     <div class="chess-player">
                         <div class="chess-player-avatar">♞</div>
-
                         <div class="chess-player-info">
-                            <div class="chess-player-name" id="opponentName">
-                                Соперник
-                            </div>
-
-                            <div class="chess-player-rank">
-                                Уровень 1 · ELO 1000
-                            </div>
+                            <div class="chess-player-name" id="opponentName">Соперник</div>
+                            <div class="chess-player-rank">ELO 1000</div>
                         </div>
-
-                        <div class="chess-player-side" id="opponentSide">
-                            ЧЁРНЫЕ
-                        </div>
+                        <div class="chess-player-side" id="opponentSide">ЧЁРНЫЕ</div>
                     </div>
 
                     <div class="chess-board-frame">
                         <div id="chessBoard"></div>
                     </div>
 
-                    <div
-                        class="chess-player"
-                        style="margin-top:10px;margin-bottom:0"
-                    >
+                    <div class="chess-player" style="margin-top:10px">
                         <div class="chess-player-avatar">R</div>
-
                         <div class="chess-player-info">
                             <div class="chess-player-name" id="myChessName"></div>
-
-                            <div class="chess-player-rank">
-                                Уровень 1 · ELO 1000
-                            </div>
+                            <div class="chess-player-rank">ELO 1000</div>
                         </div>
-
-                        <div class="chess-player-side" id="mySide">
-                            КРАСНЫЕ
-                        </div>
+                        <div class="chess-player-side" id="mySide">КРАСНЫЕ</div>
                     </div>
 
                     <div class="chess-status">
-                        <span class="chess-status-label">
-                            Состояние партии
-                        </span>
-
-                        <span id="chessStatus">
-                            Ожидание подключения...
-                        </span>
+                        <span class="chess-status-label">Состояние партии</span>
+                        <span id="chessStatus">Подключение...</span>
                     </div>
                 </div>
 
                 <div class="chess-sidebar">
                     <div class="chess-card">
                         <div class="chess-card-title">Комната</div>
-
                         <div class="chess-room-code" id="chessRoomCode"></div>
-
-                        <div class="chess-room-hint">
-                            Отправь код другу, чтобы он смог подключиться
-                        </div>
-
+                        <div class="chess-room-hint">Отправь код другу</div>
                         <button class="chess-button" id="copyChessCode">
                             КОПИРОВАТЬ КОД
                         </button>
@@ -762,21 +675,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     <div class="chess-card">
                         <div class="chess-card-title">История ходов</div>
-
                         <div class="chess-moves" id="chessMoves">
-                            <span class="chess-move-empty">
-                                Ходы появятся здесь
-                            </span>
+                            <span class="chess-move-empty">Ходы появятся здесь</span>
                         </div>
                     </div>
 
                     <div class="chess-card">
                         <div class="chess-card-title">Управление</div>
-
-                        <button
-                            class="chess-button chess-button-secondary"
-                            id="leaveChess"
-                        >
+                        <button class="chess-button chess-button-secondary"
+                                id="leaveChess">
                             ВЫЙТИ ИЗ ИГРЫ
                         </button>
                     </div>
@@ -790,32 +697,26 @@ document.addEventListener('DOMContentLoaded', () => {
     if (chessMount) {
         chessMount.appendChild(chessPanel);
     } else {
-        console.error('REQUIEM: не найден элемент #chessMount');
+        console.error('Не найден #chessMount');
     }
 
     // ==========================================
-    // GAMES NAVIGATION
+    // GAMES SCREEN
     // ==========================================
 
-    const openChessButton = document.getElementById('openChess');
-    const backToGamesButton = document.getElementById('backToGames');
-
-    openChessButton?.addEventListener('click', () => {
+    document.getElementById('openChess')?.addEventListener('click', () => {
         if (gamesHub) gamesHub.style.display = 'none';
         if (chessScreen) chessScreen.style.display = 'block';
-
         chessPanel.style.display = 'block';
-
-        showToast('Шахматная арена');
     });
 
-    backToGamesButton?.addEventListener('click', () => {
+    document.getElementById('backToGames')?.addEventListener('click', () => {
         if (chessScreen) chessScreen.style.display = 'none';
         if (gamesHub) gamesHub.style.display = 'block';
     });
 
     // ==========================================
-    // CHESS ELEMENTS
+    // CHESS STATE
     // ==========================================
 
     const boardElement = document.getElementById('chessBoard');
@@ -828,25 +729,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const myChessName = document.getElementById('myChessName');
     const opponentName = document.getElementById('opponentName');
-
-    const opponentSide = document.getElementById('opponentSide');
     const mySide = document.getElementById('mySide');
-
-    const pieces = {
-        K: '♔',
-        Q: '♕',
-        R: '♖',
-        B: '♗',
-        N: '♘',
-        P: '♙',
-
-        k: '♚',
-        q: '♛',
-        r: '♜',
-        b: '♝',
-        n: '♞',
-        p: '♟'
-    };
+    const opponentSide = document.getElementById('opponentSide');
 
     const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 
@@ -857,73 +741,74 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentRoom = null;
     let playerColor = null;
     let currentFen = INITIAL_FEN;
-
     let selectedSquare = null;
     let gameFinished = false;
     let isMyTurn = false;
-    let moveHistory = [];
     let boardFlipped = false;
-
-    // ==========================================
-    // CHESS HELPERS
-    // ==========================================
+    let moveHistory = [];
 
     function setChessStatus(message) {
-        if (chessStatus) {
-            chessStatus.textContent = message;
-        }
+        if (chessStatus) chessStatus.textContent = message;
     }
 
     function showChessGame() {
-        if (lobbyElement) lobbyElement.style.display = 'none';
-        if (gameElement) gameElement.style.display = 'block';
+        lobbyElement.style.display = 'none';
+        gameElement.style.display = 'block';
     }
 
     function showChessLobby() {
-        if (lobbyElement) lobbyElement.style.display = 'block';
-        if (gameElement) gameElement.style.display = 'none';
+        lobbyElement.style.display = 'block';
+        gameElement.style.display = 'none';
     }
 
-    function getWebSocketUrl(room) {
-        const initData = encodeURIComponent(getTelegramInitData());
+    function normalizeColor(color) {
+        const value = String(color || '').toLowerCase();
 
-        return (
-            `wss://requiem-bot-7eyu.onrender.com/ws/chess/` +
-            `${encodeURIComponent(room)}?initData=${initData}`
-        );
+        if (value === 'white' || value === 'w') return 'white';
+        if (value === 'black' || value === 'b') return 'black';
+
+        return null;
     }
 
     function parseFen(fen) {
-        const position = String(fen || INITIAL_FEN).split(' ')[0];
-        const rows = position.split('/');
-        const board = [];
+        return String(fen || INITIAL_FEN)
+            .split(' ')[0]
+            .split('/')
+            .map(row => {
+                const result = [];
 
-        for (const row of rows) {
-            const line = [];
-
-            for (const char of row) {
-                if (/[1-8]/.test(char)) {
-                    const count = Number(char);
-
-                    for (let i = 0; i < count; i++) {
-                        line.push('');
+                for (const char of row) {
+                    if (/[1-8]/.test(char)) {
+                        for (let i = 0; i < Number(char); i++) {
+                            result.push('');
+                        }
+                    } else {
+                        result.push(char);
                     }
-                } else {
-                    line.push(char);
                 }
-            }
 
-            board.push(line);
-        }
-
-        return board;
+                return result;
+            });
     }
 
-    function squareName(row, col) {
-        return files[col] + (8 - row);
+    function isOwnPiece(piece) {
+        if (!piece || !playerColor) return false;
+
+        return playerColor === 'white'
+            ? piece === piece.toUpperCase()
+            : piece === piece.toLowerCase();
     }
 
-    function getBoardCoordinates() {
+    // ==========================================
+    // BOARD RENDERING — SVG PIECES
+    // ==========================================
+
+    function renderBoard() {
+        if (!boardElement) return;
+
+        const board = parseFen(currentFen);
+        boardElement.innerHTML = '';
+
         const coordinates = [];
 
         if (boardFlipped) {
@@ -940,136 +825,56 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        return coordinates;
-    }
-
-    function isOwnPiece(piece) {
-        if (!piece || !playerColor) return false;
-
-        if (playerColor === 'white') {
-            return piece === piece.toUpperCase();
-        }
-
-        return piece === piece.toLowerCase();
-    }
-
-    function normalizeColor(color) {
-        if (!color) return null;
-
-        const value = String(color).toLowerCase();
-
-        if (value === 'white' || value === 'w') {
-            return 'white';
-        }
-
-        if (value === 'black' || value === 'b') {
-            return 'black';
-        }
-
-        return null;
-    }
-
-    function updatePlayerLabels() {
-        const isWhite = playerColor === 'white';
-
-        if (myChessName) {
-            myChessName.textContent = username;
-        }
-
-        if (opponentName && !opponentName.textContent.trim()) {
-            opponentName.textContent = 'Соперник';
-        }
-
-        if (mySide) {
-            mySide.textContent = isWhite ? 'КРАСНЫЕ' : 'ЧЁРНЫЕ';
-        }
-
-        if (opponentSide) {
-            opponentSide.textContent = isWhite ? 'ЧЁРНЫЕ' : 'КРАСНЫЕ';
-        }
-    }
-
-    // ==========================================
-    // BOARD RENDERING
-    // ==========================================
-
-    function renderBoard() {
-        if (!boardElement) return;
-
-        const board = parseFen(currentFen);
-
-        boardElement.innerHTML = '';
-
-        const coordinates = getBoardCoordinates();
-
         coordinates.forEach(({ row, col }) => {
             const piece = board[row]?.[col] || '';
-
             const square = document.createElement('div');
 
             square.className = 'chess-square';
-
             square.classList.add(
-                (row + col) % 2 === 0
-                    ? 'chess-light'
-                    : 'chess-dark'
+                (row + col) % 2 === 0 ? 'chess-light' : 'chess-dark'
             );
 
-            const name = squareName(row, col);
-
-            square.dataset.square = name;
+            const name = files[col] + (8 - row);
 
             if (selectedSquare === name) {
                 square.classList.add('chess-selected');
             }
 
-            const pieceElement = document.createElement('span');
-
-            pieceElement.className = 'chess-piece';
-            pieceElement.textContent = pieces[piece] || '';
+            square.dataset.square = name;
 
             if (piece) {
-                if (piece === piece.toUpperCase()) {
-                    pieceElement.classList.add('chess-white-piece');
-                } else {
-                    pieceElement.classList.add('chess-black-piece');
-                }
+                const image = document.createElement('img');
 
-                if (piece === 'p') {
-                    pieceElement.classList.add('chess-black-pawn');
-                }
+                image.className = 'chess-piece-img';
+                image.alt = piece;
+                image.draggable = false;
+                image.src = pieceImages[piece];
+
+                square.appendChild(image);
             }
-
-            square.appendChild(pieceElement);
 
             if (col === (boardFlipped ? 7 : 0)) {
                 const rank = document.createElement('span');
-
                 rank.className = 'chess-coord chess-coord-rank';
                 rank.textContent = String(8 - row);
-
                 square.appendChild(rank);
             }
 
             if (row === (boardFlipped ? 0 : 7)) {
                 const file = document.createElement('span');
-
                 file.className = 'chess-coord chess-coord-file';
                 file.textContent = files[col];
-
                 square.appendChild(file);
             }
 
-            square.addEventListener('click', () => {
-                handleSquareClick(name);
-            });
+            square.addEventListener('click', () => handleSquareClick(name));
 
             boardElement.appendChild(square);
         });
     }
 
     // ==========================================
-    // MOVE SELECTION
+    // MOVE LOGIC
     // ==========================================
 
     function handleSquareClick(square) {
@@ -1079,7 +884,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (gameFinished) {
-            showToast('Партия уже завершена');
+            showToast('Партия завершена');
             return;
         }
 
@@ -1089,10 +894,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const board = parseFen(currentFen);
-
         const col = files.indexOf(square[0]);
         const row = 8 - Number(square[1]);
-
         const clickedPiece = board[row]?.[col] || '';
 
         if (!selectedSquare) {
@@ -1103,37 +906,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
             selectedSquare = square;
             renderBoard();
-
             return;
         }
 
         if (selectedSquare === square) {
             selectedSquare = null;
             renderBoard();
-
             return;
         }
 
         if (clickedPiece && isOwnPiece(clickedPiece)) {
             selectedSquare = square;
             renderBoard();
-
             return;
         }
 
         const move = selectedSquare + square;
-
         selectedSquare = null;
         renderBoard();
-
-        sendChessMove(move);
-    }
-
-    function sendChessMove(move) {
-        if (!socket || socket.readyState !== WebSocket.OPEN) {
-            showToast('Соединение потеряно');
-            return;
-        }
 
         socket.send(JSON.stringify({
             type: 'move',
@@ -1149,32 +939,22 @@ document.addEventListener('DOMContentLoaded', () => {
         moveHistory = [];
 
         if (chessMoves) {
-            chessMoves.innerHTML = `
-                <span class="chess-move-empty">
-                    Ходы появятся здесь
-                </span>
-            `;
+            chessMoves.innerHTML =
+                '<span class="chess-move-empty">Ходы появятся здесь</span>';
         }
     }
 
     function addMoveToHistory(move) {
-        if (!move) return;
+        if (!move || !chessMoves) return;
 
         moveHistory.push(String(move));
-
-        if (!chessMoves) return;
-
         chessMoves.innerHTML = '';
 
         moveHistory.forEach((item, index) => {
             const line = document.createElement('div');
-
             line.textContent = `${index + 1}. ${item}`;
-
             chessMoves.appendChild(line);
         });
-
-        chessMoves.scrollTop = chessMoves.scrollHeight;
     }
 
     // ==========================================
@@ -1189,38 +969,35 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         currentRoom = room;
+        playerColor = null;
         selectedSquare = null;
         gameFinished = false;
         isMyTurn = false;
-        playerColor = null;
         boardFlipped = false;
-
         currentFen = INITIAL_FEN;
 
-        if (chessRoomCode) {
-            chessRoomCode.textContent = room;
-        }
+        if (chessRoomCode) chessRoomCode.textContent = room;
 
         resetMoveHistory();
-
         showChessGame();
         setChessStatus('Подключение...');
-
         renderBoard();
 
-        try {
-            socket = new WebSocket(getWebSocketUrl(room));
-        } catch (error) {
-            console.error('Chess WebSocket error:', error);
+        const url =
+            `wss://requiem-bot-7eyu.onrender.com/ws/chess/` +
+            `${encodeURIComponent(room)}?initData=${encodeURIComponent(initData())}`;
 
+        try {
+            socket = new WebSocket(url);
+        } catch (error) {
+            console.error(error);
             setChessStatus('Ошибка подключения');
             showToast('Не удалось подключиться');
-
             return;
         }
 
         socket.addEventListener('open', () => {
-            setChessStatus('Подключено. Ожидание соперника');
+            setChessStatus('Ожидание соперника');
         });
 
         socket.addEventListener('message', event => {
@@ -1229,7 +1006,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 data = JSON.parse(event.data);
             } catch (error) {
-                console.error('Invalid chess message:', error);
+                console.error('Ошибка сообщения:', error);
                 return;
             }
 
@@ -1243,49 +1020,40 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         socket.addEventListener('error', error => {
-            console.error('Chess socket error:', error);
+            console.error('WebSocket error:', error);
             setChessStatus('Ошибка соединения');
         });
     }
-
-    // ==========================================
-    // SERVER MESSAGES
-    // ==========================================
 
     function handleChessMessage(data) {
         if (!data || typeof data !== 'object') return;
 
         if (data.color) {
             playerColor = normalizeColor(data.color);
-
             boardFlipped = playerColor === 'black';
 
-            updatePlayerLabels();
+            myChessName.textContent = username;
+
+            mySide.textContent =
+                playerColor === 'white' ? 'КРАСНЫЕ' : 'ЧЁРНЫЕ';
+
+            opponentSide.textContent =
+                playerColor === 'white' ? 'ЧЁРНЫЕ' : 'КРАСНЫЕ';
         }
 
-        if (data.fen) {
-            currentFen = data.fen;
-        }
+        if (data.fen) currentFen = data.fen;
 
         if (typeof data.turn === 'string') {
             const turn = data.turn.toLowerCase();
 
             isMyTurn =
-                (
-                    playerColor === 'white' &&
-                    (turn === 'w' || turn === 'white')
-                ) ||
-                (
-                    playerColor === 'black' &&
-                    (turn === 'b' || turn === 'black')
-                );
+                (playerColor === 'white' && ['w', 'white'].includes(turn)) ||
+                (playerColor === 'black' && ['b', 'black'].includes(turn));
         }
 
-        if (data.move) {
-            addMoveToHistory(data.move);
-        }
+        if (data.move) addMoveToHistory(data.move);
 
-        if (data.opponent_name && opponentName) {
+        if (data.opponent_name) {
             opponentName.textContent = data.opponent_name;
         }
 
@@ -1302,14 +1070,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } else if (isMyTurn) {
             setChessStatus('Ваш ход');
-        } else if (playerColor) {
-            setChessStatus('Ход соперника');
         } else {
-            setChessStatus('Ожидание подключения...');
+            setChessStatus('Ход соперника');
         }
 
         selectedSquare = null;
-
         renderBoard();
     }
 
@@ -1320,44 +1085,23 @@ document.addEventListener('DOMContentLoaded', () => {
     async function createChessRoom() {
         const button = document.getElementById('createChess');
 
-        if (button) {
-            button.disabled = true;
-            button.textContent = 'СОЗДАНИЕ...';
-        }
+        button.disabled = true;
+        button.textContent = 'СОЗДАНИЕ...';
 
         try {
-            const initData = getTelegramInitData();
+            const response = await fetch(`${API_URL}/api/chess/create`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Telegram-Init-Data': initData()
+                },
+                body: JSON.stringify({ initData: initData() })
+            });
 
-            const response = await fetch(
-                `${API_URL}/api/chess/create`,
-                {
-                    method: 'POST',
-
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Telegram-Init-Data': initData
-                    },
-
-                    body: JSON.stringify({
-                        initData
-                    })
-                }
-            );
-
-            let data;
-
-            try {
-                data = await response.json();
-            } catch {
-                throw new Error('Сервер вернул некорректный ответ');
-            }
+            const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(
-                    data.detail ||
-                    data.error ||
-                    'Ошибка создания комнаты'
-                );
+                throw new Error(data.detail || data.error || 'Ошибка создания');
             }
 
             const room =
@@ -1371,21 +1115,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             connectToRoom(String(room).toUpperCase());
-
             showToast('Комната создана');
 
         } catch (error) {
-            console.error('Create room error:', error);
-
-            showToast(
-                error.message || 'Не удалось создать комнату'
-            );
-
+            console.error(error);
+            showToast(error.message || 'Ошибка создания комнаты');
         } finally {
-            if (button) {
-                button.disabled = false;
-                button.textContent = 'СОЗДАТЬ КОМНАТУ';
-            }
+            button.disabled = false;
+            button.textContent = 'СОЗДАТЬ КОМНАТУ';
         }
     }
 
@@ -1395,10 +1132,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function joinChessRoom() {
         const input = document.getElementById('chessCode');
-
-        const room = input?.value
-            .trim()
-            .toUpperCase();
+        const room = input.value.trim().toUpperCase();
 
         if (!room) {
             showToast('Введи код комнаты');
@@ -1414,7 +1148,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================
-    // COPY ROOM CODE
+    // COPY ROOM
     // ==========================================
 
     async function copyChessRoomCode() {
@@ -1424,38 +1158,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            if (navigator.clipboard?.writeText) {
-                await navigator.clipboard.writeText(currentRoom);
-            } else {
-                throw new Error('Clipboard API недоступен');
-            }
-
+            await navigator.clipboard.writeText(currentRoom);
             showToast('Код скопирован');
-
-        } catch (error) {
-            const temporaryInput = document.createElement('textarea');
-
-            temporaryInput.value = currentRoom;
-
-            document.body.appendChild(temporaryInput);
-
-            temporaryInput.select();
+        } catch {
+            const input = document.createElement('textarea');
+            input.value = currentRoom;
+            document.body.appendChild(input);
+            input.select();
 
             try {
-                const copied = document.execCommand('copy');
-
-                if (!copied) {
-                    throw new Error('Copy failed');
-                }
-
+                document.execCommand('copy');
                 showToast('Код скопирован');
-
-            } catch (copyError) {
+            } catch {
                 showToast('Не удалось скопировать код');
-
-            } finally {
-                temporaryInput.remove();
             }
+
+            input.remove();
         }
     }
 
@@ -1476,20 +1194,17 @@ document.addEventListener('DOMContentLoaded', () => {
         gameFinished = false;
         isMyTurn = false;
         boardFlipped = false;
-
         currentFen = INITIAL_FEN;
 
         resetMoveHistory();
-
         showChessLobby();
-
-        setChessStatus('Ожидание подключения...');
+        setChessStatus('Ожидание подключения');
 
         showToast('Ты вышел из партии');
     }
 
     // ==========================================
-    // CHESS BUTTON EVENTS
+    // BUTTONS
     // ==========================================
 
     document.getElementById('createChess')
@@ -1506,42 +1221,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('chessCode')
         ?.addEventListener('keydown', event => {
-            if (event.key === 'Enter') {
-                joinChessRoom();
-            }
+            if (event.key === 'Enter') joinChessRoom();
         });
 
     // ==========================================
-    // PLAYER REGISTRATION
+    // REGISTER PLAYER
     // ==========================================
 
     async function registerPlayer() {
         try {
-            const initData = getTelegramInitData();
-
-            const response = await fetch(
-                `${API_URL}/api/register`,
-                {
-                    method: 'POST',
-
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Telegram-Init-Data': initData
-                    },
-
-                    body: JSON.stringify({
-                        initData
-                    })
-                }
-            );
+            const response = await fetch(`${API_URL}/api/register`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Telegram-Init-Data': initData()
+                },
+                body: JSON.stringify({ initData: initData() })
+            });
 
             if (!response.ok) {
-                console.warn(
-                    'Player registration failed:',
-                    response.status
-                );
+                console.warn('Registration failed:', response.status);
             }
-
         } catch (error) {
             console.error('Registration error:', error);
         }
@@ -1553,17 +1253,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadLeaderboard() {
         try {
-            const response = await fetch(
-                `${API_URL}/api/leaderboard`
-            );
+            const response = await fetch(`${API_URL}/api/leaderboard`);
 
             if (!response.ok) {
-                throw new Error('Не удалось загрузить рейтинг');
+                throw new Error('Ошибка загрузки рейтинга');
             }
 
             const data = await response.json();
 
-            const leaderboard =
+            const players =
                 Array.isArray(data) ? data :
                 Array.isArray(data.players) ? data.players :
                 Array.isArray(data.leaderboard) ? data.leaderboard :
@@ -1577,24 +1275,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
             container.innerHTML = '';
 
-            if (leaderboard.length === 0) {
-                container.textContent =
-                    'Пока нет игроков в рейтинге';
-
+            if (!players.length) {
+                container.textContent = 'Пока нет игроков в рейтинге';
                 return;
             }
 
-            leaderboard.forEach((player, index) => {
+            players.forEach((player, index) => {
                 const item = document.createElement('div');
-
                 item.className = 'leaderboard-item';
 
                 const position = document.createElement('span');
-
                 position.textContent = `#${index + 1}`;
 
                 const name = document.createElement('span');
-
                 name.textContent =
                     player.name ||
                     player.username ||
@@ -1602,24 +1295,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     'Игрок';
 
                 const rating = document.createElement('span');
-
                 rating.textContent =
                     `${player.elo ?? player.rating ?? 1000} ELO`;
 
-                item.appendChild(position);
-                item.appendChild(name);
-                item.appendChild(rating);
-
+                item.append(position, name, rating);
                 container.appendChild(item);
             });
-
         } catch (error) {
             console.error('Leaderboard error:', error);
         }
     }
 
     // ==========================================
-    // INITIALIZATION
+    // START
     // ==========================================
 
     showChessLobby();
@@ -1628,6 +1316,6 @@ document.addEventListener('DOMContentLoaded', () => {
     registerPlayer();
     loadLeaderboard();
 
-    console.log('REQUIEM Mini App initialized');
+    console.log('REQUIEM initialized');
     console.log('REQUIEM Chess initialized');
 });
