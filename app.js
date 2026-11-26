@@ -1259,12 +1259,13 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const oldPlay = target.closest('#openChess');
-    if (oldPlay) {
-      event.preventDefault();
-      showGames();
-      return;
-    }
+   const oldPlay = target.closest('#openChess');
+if (oldPlay) {
+  event.preventDefault();
+  event.stopPropagation();
+  showChess();
+  return;
+}
 
     const nav = target.closest('.nav-item[data-page]');
     if (nav) {
