@@ -1,0 +1,182 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#080808">
+    <title>REQUIEM</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="background">
+        <div class="starfall">
+    <span class="star"></span>
+    <span class="star"></span>
+    <span class="star"></span>
+    <span class="star"></span>
+    <span class="star"></span>
+    <span class="star"></span>
+</div>
+        <div class="orbs">
+    <span class="orb orb1"></span>
+    <span class="orb orb2"></span>
+    <span class="orb orb3"></span>
+    <span class="orb orb4"></span>
+    <span class="orb orb5"></span>
+    <span class="orb orb6"></span>
+</div>
+        <div class="particles">
+    <span class="particle p1"></span>
+    <span class="particle p2"></span>
+    <span class="particle p3"></span>
+    <span class="particle p4"></span>
+    <span class="particle p5"></span>
+    <span class="particle p6"></span>
+    <span class="particle p7"></span>
+    <span class="particle p8"></span>
+    <span class="particle p9"></span>
+    <span class="particle p10"></span>
+    <span class="particle p11"></span>
+    <span class="particle p12"></span>
+</div>
+        <div class="red-line line-one"></div>
+        <div class="red-line line-two"></div>
+        <div class="square square-one"></div>
+        <div class="square square-two"></div>
+        <div class="square square-three"></div>
+    </div>
+
+    <main class="app">
+
+        <header class="header">
+            <div class="logo">REQUIEM<span>.</span></div>
+            <div class="online">
+                <span class="online-dot"></span>
+                ONLINE
+            </div>
+        </header>
+
+        <section class="profile-card">
+            <div class="profile-top">
+                <div class="avatar">R</div>
+                <div class="profile-info">
+                    <span class="nickname">PLAYER</span>
+                    <span class="rank">NOVICE · LVL 1</span>
+                </div>
+                <div class="level">01</div>
+            </div>
+
+            <div class="xp-info">
+                <span>EXPERIENCE</span>
+                <span id="xp-text">0 / 100 XP</span>
+            </div>
+
+            <div class="xp-bar">
+                <div class="xp-fill" id="xp-fill"></div>
+            </div>
+        </section>
+
+        <section class="balance">
+            <div class="balance-card">
+                <div class="balance-label">CRYSTALS</div>
+                <div class="balance-value">
+                    <span class="crystal">◆</span>
+                    <span id="crystals">250</span>
+                </div>
+            </div>
+
+            <div class="balance-card">
+                <div class="balance-label">YOUR LEVEL</div>
+                <div class="balance-value">
+                    <span id="level">1</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="daily">
+            <div class="daily-left">
+                <div class="daily-tag">DAILY REWARD</div>
+                <div class="daily-title">Ежедневный бонус</div>
+                <div class="daily-description">Заходи каждый день и забирай награду</div>
+            </div>
+
+            <button class="daily-button" id="daily-button">
+                ЗАБРАТЬ
+            </button>
+        </section>
+
+        <section class="section">
+            <div class="section-heading">
+                <span>РАЗДЕЛЫ</span>
+                <span class="section-number">01 — 06</span>
+            </div>
+
+            <div class="menu-grid">
+                <button class="menu-item" data-page="profile">
+                    <span class="menu-icon">◈</span>
+                    <span class="menu-name">Профиль</span>
+                    <span class="menu-arrow">↗</span>
+                </button>
+
+                <button class="menu-item" data-page="games">
+                    <span class="menu-icon">▣</span>
+                    <span class="menu-name">Игры</span>
+                    <span class="menu-arrow">↗</span>
+                </button>
+
+                <button class="menu-item" data-page="tasks">
+                    <span class="menu-icon">☷</span>
+                    <span class="menu-name">Задания</span>
+                    <span class="menu-arrow">↗</span>
+                </button>
+
+                <button class="menu-item" data-page="collection">
+                    <span class="menu-icon">◇</span>
+                    <span class="menu-name">Коллекция</span>
+                    <span class="menu-arrow">↗</span>
+                </button>
+
+                <button class="menu-item" data-page="rating">
+                    <span class="menu-icon">♜</span>
+                    <span class="menu-name">Рейтинг</span>
+                    <span class="menu-arrow">↗</span>
+                </button>
+
+                <button class="menu-item" data-page="bonus">
+                    <span class="menu-icon">✳</span>
+            <span class="menu-name">Бонусы</span>
+                    <span class="menu-arrow">↗</span>
+                </button>
+            </div>
+        </section>
+
+        <footer class="footer">
+            REQUIEM SYSTEM <span>© 2026</span>
+        </footer>
+
+    </main>
+
+    <nav class="bottom-nav">
+        <button class="nav-button active" data-page="home">
+            <span>⌂</span>
+            <small>Главная</small>
+        </button>
+        <button class="nav-button" data-page="games">
+            <span>▣</span>
+            <small>Игры</small>
+        </button>
+        <button class="nav-button" data-page="tasks">
+            <span>☷</span>
+            <small>Задания</small>
+        </button>
+        <button class="nav-button" data-page="profile">
+            <span>◈</span>
+            <small>Профиль</small>
+        </button>
+    </nav>
+
+    <script src="app.js"></script>
+</body>
+</html>
