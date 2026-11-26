@@ -1,4 +1,3 @@
-```javascript
 document.addEventListener('DOMContentLoaded', () => {
 
     const tg = window.Telegram?.WebApp;
@@ -26,10 +25,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const toast = document.getElementById('toast');
     let toastTimer;
 
-    function showToast(text) {
+    function showToast(message) {
         if (!toast) return;
 
-        toast.textContent = text;
+        toast.textContent = message;
         toast.classList.add('show');
 
         clearTimeout(toastTimer);
@@ -56,15 +55,14 @@ document.addEventListener('DOMContentLoaded', () => {
         el.addEventListener('click', () => {
             const page = el.dataset.page;
 
-            document.querySelectorAll('.nav-item').forEach(n => {
-                n.classList.toggle(
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.toggle(
                     'active',
-                    n.dataset.page === page
+                    item.dataset.page === page
                 );
             });
 
-            const ratingSection =
-                document.getElementById('ratingSection');
+            const ratingSection = document.getElementById('ratingSection');
 
             if (ratingSection) {
                 ratingSection.style.display =
@@ -85,8 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // НАСТРОЙКИ
 
-    const settingsButton =
-        document.getElementById('settings');
+    const settingsButton = document.getElementById('settings');
 
     if (settingsButton) {
         settingsButton.addEventListener('click', () => {
@@ -96,27 +93,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // API
 
-    const API_URL =
-        'https://requiem-bot-7eyu.onrender.com';
+    const API_URL = 'https://requiem-bot-7eyu.onrender.com';
 
     // ЗАГРУЗКА РЕЙТИНГА
 
     async function loadPlayers() {
         try {
-            const response = await fetch(
-    API_URL + '/api/players'
-);
+            const response = await fetch(API_URL + '/api/players');
 
             if (!response.ok) {
-               throw new Error('HTTP ' + response.status);
+                throw new Error('HTTP ' + response.status);
             }
 
             const data = await response.json();
 
             console.log('REQUIEM PLAYERS:', data.players);
 
-            const ratingList =
-                document.getElementById('ratingList');
+            const ratingList = document.getElementById('ratingList');
 
             if (!ratingList) return;
 
@@ -143,7 +136,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const avatar = document.createElement('img');
                 avatar.className = 'rating-avatar';
-                avatar.src = player.photo_url || '';
+
+                if (player.photo_url) {
+                    avatar.src = player.photo_url;
+                } else {
+                    avatar.style.display = 'none';
+                }
 
                 avatar.onerror = () => {
                     avatar.style.display = 'none';
@@ -152,14 +150,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const info = document.createElement('div');
                 info.className = 'rating-info';
 
-                const playerName =
-                    document.createElement('strong');
-
+                const playerName = document.createElement('strong');
                 playerName.textContent = name;
 
-                const playerUsername =
-                    document.createElement('small');
-
+                const playerUsername = document.createElement('small');
                 playerUsername.textContent = player.username
                     ? '@' + player.username
                     : 'Игрок REQUIEM';
@@ -193,21 +187,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            const response = await fetch(
-                `${API_URL}/api/register`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        initData: tg.initData
-                    })
-                }
-            );
+            const response = await fetch(API_URL + '/api/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    initData: tg.initData
+                })
+            });
 
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+                throw new Error('HTTP ' + response.status);
             }
 
             const result = await response.json();
@@ -225,4 +216,3 @@ document.addEventListener('DOMContentLoaded', () => {
     registerPlayer();
 
 });
-```
