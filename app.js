@@ -5,14 +5,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const API = 'https://requiem-bot-7eyu.onrender.com';
   const tg = window.Telegram?.WebApp || null;
   const user = tg?.initDataUnsafe?.user || null;
-  ${pieceSVG(piece, color)}
-  const $ = (selector, root = document) => root.querySelector(selector);
-  const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+  const uid = user?.id ? String(user.id) : '';
+
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 
   const MODES = {
     bullet: { name: 'ПУЛЯ', label: '2 минуты', seconds: 120 },
     blitz: { name: 'БЛИЦ', label: '5 минут', seconds: 300 },
     rapid: { name: 'РАПИД', label: '10 минут', seconds: 600 }
+  };
+
+  const PIECES = {
+    w: { k:'♔', q:'♕', r:'♖', b:'♗', n:'♘', p:'♙' },
+    b: { k:'♚', q:'♛', r:'♜', b:'♝', n:'♞', p:'♟' }
   };
 
   let mode = 'blitz';
@@ -25,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let legalMoves = [];
   let lastMove = [];
   let profiles = {};
-  let clocks = { white: 300, black: 300 };
+  let clocks = { white:300, black:300 };
   let clockInterval = null;
   let clockTick = Date.now();
   let myProfile = null;
@@ -34,44 +40,42 @@ document.addEventListener('DOMContentLoaded', () => {
   let chessUIReady = false;
 
   const game = {
-    connected: false,
-    started: false,
-    over: false,
-    locked: true
+    connected:false,
+    started:false,
+    over:false,
+    locked:true
   };
 
-  // Telegram Mini App
   if (tg) {
     try {
       tg.ready();
       tg.expand();
       tg.setHeaderColor?.('#080808');
       tg.setBackgroundColor?.('#080808');
-    } catch (err) {
-      console.warn('Telegram UI setup:', err);
+    } catch(e) {
+      console.warn(e);
     }
   }
 
-  function escapeHTML(value = '') {
-    return String(value).replace(/[&<>"']/g, ch => ({
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;'
-    }[ch]));
+  function escapeHTML(v='') {
+    return String(v).replace(/[&<>"']/g, c => ({
+      '&':'&amp;',
+      '<':'&lt;',
+      '>':'&gt;',
+      '"':'&quot;',
+      "'":'&#39;'
+    }[c]));
   }
 
   function displayName(p) {
     if (!p) return 'Игрок';
-    return `${p.first_name || ''} ${p.last_name || ''}`.trim()
-      || p.username
-      || `Игрок ${p.id || ''}`;
+    const n = `${p.first_name||''} ${p.last_name||''}`.trim();
+    return n || p.username || `Игрок ${p.id||''}`;
   }
 
   function username(p) {
     return p?.username
-      ? '@' + String(p.username).replace(/^@/, '')
+      ? '@'+String(p.username).replace(/^@/,'')
       : 'Telegram';
   }
 
@@ -91,510 +95,314 @@ document.addEventListener('DOMContentLoaded', () => {
     return p?.photo_url || p?.avatar_url || '';
   }
 
-  function formatTime(value) {
-    const n = Math.max(0, Math.floor(Number(value) || 0));
-    return `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
+  function formatTime(v) {
+    const n = Math.max(0, Math.floor(Number(v)||0));
+    return `${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`;
   }
 
-  function avatarHTML(p, extraClass = '') {
+  function avatarHTML(p, cls='') {
     const src = photo(p);
-    return `
-      <div class="rq-avatar ${extraClass}">
-        <span>${escapeHTML(initials(p))}</span>
-        ${src ? `<img src="${escapeHTML(src)}" alt="" onerror="this.remove()">` : ''}
-      </div>
-    `;
+    return `<div class="rq-avatar ${cls}">
+      <span>${escapeHTML(initials(p))}</span>
+      ${src ? `<img src="${escapeHTML(src)}" alt="" onerror="this.remove()">` : ''}
+    </div>`;
   }
 
-  function toast(message) {
-    let node = $('#toast');
-
-    if (!node) {
-      node = document.createElement('div');
-      node.id = 'toast';
-      node.className = 'toast';
-      document.body.appendChild(node);
+  function toast(msg) {
+    let n = $('#toast');
+    if (!n) {
+      n = document.createElement('div');
+      n.id = 'toast';
+      n.className = 'toast';
+      document.body.appendChild(n);
     }
-
-    node.textContent = String(message || '');
-    node.classList.add('show');
-
-    clearTimeout(node._hideTimer);
-    node._hideTimer = setTimeout(() => node.classList.remove('show'), 2600);
+    n.textContent = String(msg||'');
+    n.classList.add('show');
+    clearTimeout(n._hideTimer);
+    n._hideTimer = setTimeout(() => n.classList.remove('show'), 2600);
   }
 
-  async function apiRequest(path, options = {}) {
-    const response = await fetch(API + path, {
-      ...options,
+  async function apiRequest(path, opts={}) {
+    const res = await fetch(API+path, {
+      ...opts,
       headers: {
-        'Content-Type': 'application/json',
-        ...(options.headers || {})
+        'Content-Type':'application/json',
+        ...(opts.headers||{})
       }
     });
-
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      throw new Error(data.detail || data.error || `HTTP ${response.status}`);
-    }
-
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail||data.error||`HTTP ${res.status}`);
     return data;
   }
 
-  function normalizeColor(value) {
-    if (value === 'white' || value === 'w') return 'white';
-    if (value === 'black' || value === 'b') return 'black';
-    return null;
+  function normalizeColor(v) {
+    return v==='white'||v==='w'?'white':
+           v==='black'||v==='b'?'black':null;
   }
 
-  function normalizeTurn(value) {
-    if (value === 'white') return 'w';
-    if (value === 'black') return 'b';
-    return value;
+  function normalizeTurn(v) {
+    return v==='white'?'w':v==='black'?'b':v;
   }
 
   function modeLabel() {
-    return MODES[mode]?.name || 'БЛИЦ';
+    return MODES[mode]?.name||'БЛИЦ';
   }
 
-  // Styles
-  const css = document.createElement('style');
+  const style = document.createElement('style');
 
-  css.textContent = `
-    .rq-home-play {
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      width:100%;
-      margin:16px 0 4px;
-      padding:15px;
-      border:1px solid #d62a43;
-      border-radius:12px;
-      background:linear-gradient(120deg,#951326,#e0203e);
-      color:#fff;
-      font-size:14px;
-      font-weight:900;
-      letter-spacing:1px;
-      cursor:pointer;
-      position:relative;
-      z-index:5;
-      pointer-events:auto;
-    }
+  style.textContent = `
+  .rq-home-play {
+    display:flex;align-items:center;justify-content:center;width:100%;
+    margin:16px 0 4px;padding:15px;border:1px solid #d62a43;
+    border-radius:12px;background:linear-gradient(120deg,#951326,#e0203e);
+    color:#fff;font-size:14px;font-weight:900;letter-spacing:1px;
+    cursor:pointer;position:relative;z-index:5;pointer-events:auto
+  }
 
-    #chessMount { color:#eee; }
+  #chessMount { color:#eee }
 
-    .rq-avatar {
-      width:44px;
-      height:44px;
-      flex-shrink:0;
-      border-radius:50%;
-      overflow:hidden;
-      position:relative;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      background:linear-gradient(145deg,#3b111b,#100c0d);
-      border:2px solid #9d1828;
-      color:#fff;
-      font-weight:900;
-      font-size:17px;
-    }
+  .rq-avatar {
+    width:44px;height:44px;flex-shrink:0;border-radius:50%;
+    overflow:hidden;position:relative;display:flex;align-items:center;
+    justify-content:center;background:linear-gradient(145deg,#3b111b,#100c0d);
+    border:2px solid #9d1828;color:#fff;font-weight:900;font-size:17px
+  }
 
-    .rq-avatar img {
-      position:absolute;
-      inset:0;
-      width:100%;
-      height:100%;
-      object-fit:cover;
-      z-index:2;
-    }
+  .rq-avatar img {
+    position:absolute;inset:0;width:100%;height:100%;
+    object-fit:cover;z-index:2
+  }
 
-    .rq-avatar.large { width:44px;height:44px;font-size:18px; }
-    .rq-avatar.small { width:34px;height:34px;font-size:13px; }
+  .rq-avatar.small {width:34px;height:34px;font-size:13px}
 
-    .rq-player-card {
-      display:flex;
-      align-items:center;
-      gap:8px;
-      padding:8px;
-      background:#111;
-      border:1px solid #292020;
-      border-radius:11px;
-      min-width:0;
-      overflow:hidden;
-    }
+  .rq-player-card {
+    display:flex;align-items:center;gap:8px;padding:8px;background:#111;
+    border:1px solid #292020;border-radius:11px;min-width:0;overflow:hidden
+  }
 
-    .rq-player-card.turn-active {
-      border-color:#c52640;
-      box-shadow:0 0 12px #a3153020;
-    }
+  .rq-player-card.turn-active {
+    border-color:#c52640;box-shadow:0 0 12px #a3153020
+  }
 
-    .rq-player-info { flex:1;min-width:0; }
+  .rq-player-info {flex:1;min-width:0}
 
-    .rq-player-name {
-      font-size:12px;
-      font-weight:900;
-      color:#fff;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap;
-    }
+  .rq-player-name {
+    font-size:12px;font-weight:900;color:#fff;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap
+  }
 
-    .rq-player-username {
-      font-size:10px;
-      color:#888;
-      margin-top:3px;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap;
-    }
+  .rq-player-username {
+    font-size:10px;color:#888;margin-top:3px;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap
+  }
 
-    .rq-player-rank {
-      color:#e43b4d;
-      font-size:10px;
-      font-weight:800;
-      margin-top:4px;
-    }
+  .rq-player-rank {
+    color:#e43b4d;font-size:10px;font-weight:800;margin-top:4px
+  }
 
-    .rq-player-stats {
-      display:flex;
-      gap:6px;
-      flex-wrap:wrap;
-      color:#888;
-      font-size:9px;
-      margin-top:4px;
-    }
+  .rq-player-stats {
+    display:flex;gap:6px;flex-wrap:wrap;color:#888;font-size:9px;margin-top:4px
+  }
 
-    .rq-clock {
-      background:#080808;
-      border:1px solid #332126;
-      border-radius:8px;
-      padding:7px 5px;
-      min-width:55px;
-      text-align:center;
-      color:#fff;
-      font-size:16px;
-      font-weight:900;
-      font-variant-numeric:tabular-nums;
-    }
+  .rq-clock {
+    background:#080808;border:1px solid #332126;border-radius:8px;
+    padding:7px 5px;min-width:55px;text-align:center;color:#fff;
+    font-size:16px;font-weight:900;font-variant-numeric:tabularnums
+  }
 
-    .rq-clock.active {
-      border-color:#d52b45;
-      background:#320d16;
-      color:#ff5269;
-    }
+  .rq-clock.active {border-color:#d52b45;background:#320d16;color:#ff5269}
+  .rq-clock.danger {color:#ff334e}
 
-    .rq-clock.danger { color:#ff334e; }
+  .rq-chess-players {
+    display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:12px 0
+  }
 
-    .rq-chess-players {
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:7px;
-      margin:12px 0;
-    }
+  .rq-mode-selector {
+    display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:12px 0
+  }
 
-    .rq-mode-selector {
-      display:grid;
-      grid-template-columns:repeat(3,1fr);
-      gap:7px;
-      margin:12px 0;
-    }
+  .rq-mode-btn {
+    border:1px solid #2b2022;border-radius:10px;background:#111;color:#888;
+    padding:10px 3px;font-size:10px;font-weight:900;cursor:pointer
+  }
 
-    .rq-mode-btn {
-      border:1px solid #2b2022;
-      border-radius:10px;
-      background:#111;
-      color:#888;
-      padding:10px 3px;
-      font-size:10px;
-      font-weight:900;
-      cursor:pointer;
-    }
+  .rq-mode-btn span {
+    display:block;color:#fff;font-size:13px;margin-top:4px
+  }
 
-    .rq-mode-btn span {
-      display:block;
-      color:#fff;
-      font-size:13px;
-      margin-top:4px;
-    }
+  .rq-mode-btn.selected {
+    color:#ff4058;border-color:#e12642;
+    background:linear-gradient(145deg,#3b0d16,#160a0d)
+  }
 
-    .rq-mode-btn.selected {
-      color:#ff4058;
-      border-color:#e12642;
-      background:linear-gradient(145deg,#3b0d16,#160a0d);
-    }
+  .rq-chess-board {
+    width:100%;aspect-ratio:1;display:grid;grid-template-columns:repeat(8,1fr);
+    overflow:hidden;border-radius:5px;border:2px solid #46111c;background:#100d0e;
+    touch-action:manipulation;box-shadow:0 10px 30px #0008
+  }
 
-    .rq-chess-board {
-      width:100%;
-      aspect-ratio:1;
-      display:grid;
-      grid-template-columns:repeat(8,1fr);
-      overflow:hidden;
-      border-radius:5px;
-      border:2px solid #46111c;
-      background:#100d0e;
-      touch-action:manipulation;
-      box-shadow:0 10px 30px #0008;
-    }
+  .rq-square {
+    position:relative;display:flex;align-items:center;justify-content:center;
+    min-width:0;aspect-ratio:1;overflow:hidden;cursor:pointer;
+    touch-action:manipulation
+  }
 
-    .rq-square {
-      position:relative;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      min-width:0;
-      aspect-ratio:1;
-      overflow:hidden;
-      cursor:pointer;
-      touch-action:manipulation;
-    }
+  .rq-square.light {background:#b88762}
+  .rq-square.dark {background:#492b27}
+  .rq-square.selected {background:#ad1834!important;box-shadow:inset 0 0 0 3px #ff3856}
+  .rq-square.last-move {box-shadow:inset 0 0 0 3px #e6d16c75}
 
-    .rq-square.light { background:#741329; }
-    .rq-square.dark { background:#100d0e; }
+  .rq-square.legal::after {
+    content:'';position:absolute;width:24%;height:24%;
+    background:#ddd9d2a0;border-radius:50%;z-index:1;pointer-events:none
+  }
 
-    .rq-square.selected {
-      background:#ad1834!important;
-      box-shadow:inset 0 0 0 3px #ff3856;
-    }
+  .rq-square.capture::after {
+    content:'';position:absolute;inset:5%;border:3px solid #ddd9d280;
+    border-radius:50%;z-index:1;pointer-events:none
+  }
 
-    .rq-square.last-move {
-      box-shadow:inset 0 0 0 3px #e6d16c75;
-    }
+  .rq-piece {
+    display:flex;align-items:center;justify-content:center;width:100%;height:100%;
+    font-family:'Segoe UI Symbol','DejaVu Sans',serif;
+    font-size:clamp(24px,8vw,52px);line-height:1;position:relative;z-index:2;
+    pointer-events:none;text-shadow:0 1px 2px #0008
+  }
 
-    .rq-square.legal::after {
-      content:'';
-      position:absolute;
-      width:24%;
-      height:24%;
-      background:#ddd9d2a0;
-      border-radius:50%;
-      z-index:1;
-      pointer-events:none;
-    }
+  .rq-piece.white {color:#fffdf4;text-shadow:0 1px 2px #111,0 0 2px #111}
+  .rq-piece.black {color:#171717;text-shadow:0 1px 1px #e8dfd0}
 
-    .rq-square.capture::after {
-      content:'';
-      position:absolute;
-      inset:5%;
-      border:3px solid #ddd9d280;
-      border-radius:50%;
-      z-index:1;
-      pointer-events:none;
-    }
+  .rq-chess-status {
+    text-align:center;color:#ddd;font-size:12px;padding:11px;background:#111;
+    border:1px solid #281a1d;border-radius:9px;margin:10px 0
+  }
 
-    .rq-piece {
-      width:97%;
-      height:97%;
-      object-fit:contain;
-      position:relative;
-      z-index:2;
-      pointer-events:none;
-    }
+  .rq-chess-actions {display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 
-    .rq-chess-status {
-      text-align:center;
-      color:#ddd;
-      font-size:12px;
-      padding:11px;
-      background:#111;
-      border:1px solid #281a1d;
-      border-radius:9px;
-      margin:10px 0;
-    }
+  .rq-chess-actions button,.rq-room-code-row button {
+    flex:1;border:1px solid #392027;border-radius:10px;background:#171010;
+    color:white;padding:12px 6px;font-size:12px;font-weight:900;
+    cursor:pointer;touch-action:manipulation
+  }
 
-    .rq-chess-actions {
-      display:flex;
-      gap:8px;
-      margin-top:10px;
-    }
+  .rq-chess-actions button.primary {background:#a7192b;border-color:#d32b40}
+  .rq-chess-actions button:disabled {opacity:.55;cursor:default}
 
-    .rq-chess-actions button {
-      flex:1;
-      border:1px solid #392027;
-      border-radius:10px;
-      background:#171010;
-      color:white;
-      padding:12px 6px;
-      font-size:12px;
-      font-weight:900;
-      cursor:pointer;
-      touch-action:manipulation;
-    }
+  .rq-room-code-row {display:flex;gap:7px;margin-top:12px}
 
-    .rq-chess-actions button.primary {
-      background:#a7192b;
-      border-color:#d32b40;
-    }
+  .rq-room-code-row input {
+    flex:1;min-width:0;background:#111;border:1px solid #392027;
+    color:#fff;padding:11px;border-radius:9px
+  }
 
-    .rq-rank-progress {
-      margin-top:12px;
-      padding:13px;
-      background:#111;
-      border:1px solid #292020;
-      border-radius:12px;
-    }
+  .rq-result {
+    text-align:center;padding:22px 10px;background:#170c0e;
+    border:1px solid #70202b;border-radius:15px;margin-top:12px
+  }
 
-    .rq-progress-track {
-      height:7px;
-      background:#292020;
-      border-radius:10px;
-      overflow:hidden;
-      margin-top:9px;
-    }
+  .rq-result h2 {color:#ff4057;margin:0 0 8px;font-size:24px}
 
-    .rq-progress-fill {
-      height:100%;
-      background:linear-gradient(90deg,#8b1526,#ff4257);
-    }
+  .rq-result button {
+    margin-top:14px;background:#a7192b;color:white;border:0;border-radius:9px;
+    padding:12px 20px;font-weight:900;cursor:pointer
+  }
 
-    .rq-leader-row {
-      display:flex;
-      align-items:center;
-      gap:10px;
-      padding:11px;
-      border-bottom:1px solid #252020;
-    }
+  .rq-leader-row {
+    display:flex;align-items:center;gap:10px;padding:11px;border-bottom:1px solid #252020
+  }
 
-    .rq-leader-row.me { background:#281014; }
+  .rq-leader-row.me {background:#281014}
 
-    .rq-result {
-      text-align:center;
-      padding:22px 10px;
-      background:#170c0e;
-      border:1px solid #70202b;
-      border-radius:15px;
-      margin-top:12px;
-    }
-
-    .rq-result h2 {
-      color:#ff4057;
-      margin:0 0 8px;
-      font-size:24px;
-    }
-
-    .rq-result button {
-      margin-top:14px;
-      background:#a7192b;
-      color:white;
-      border:0;
-      border-radius:9px;
-      padding:12px 20px;
-      font-weight:900;
-      cursor:pointer;
-    }
-
-    .rq-room-code-row {
-      display:flex;
-      gap:7px;
-      margin-top:12px;
-    }
-
-    .rq-room-code-row input {
-      flex:1;
-      min-width:0;
-      background:#111;
-      border:1px solid #392027;
-      color:#fff;
-      padding:11px;
-      border-radius:9px;
-    }
-
-    @media(max-width:350px) {
-      .rq-chess-players { grid-template-columns:1fr; }
-    }
+  @media(max-width:350px) {
+    .rq-chess-players {grid-template-columns:1fr}
+  }
   `;
 
-  document.head.appendChild(css);
+  document.head.appendChild(style);
 
-  // Home CTA
   function ensureHomePlayButton() {
     const hero = $('.hero');
     if (!hero || $('#rqHomePlay')) return;
 
-    const button = document.createElement('button');
-    button.id = 'rqHomePlay';
-    button.className = 'rq-home-play';
-    button.type = 'button';
-    button.textContent = 'ИГРАТЬ  ↗';
-    button.setAttribute('aria-label', 'Перейти в игры');
-
-    hero.appendChild(button);
+    const b = document.createElement('button');
+    b.id = 'rqHomePlay';
+    b.className = 'rq-home-play';
+    b.type = 'button';
+    b.textContent = 'ИГРАТЬ  ↗';
+    b.setAttribute('aria-label', 'Перейти в игры');
+    hero.appendChild(b);
   }
 
-  // Navigation
   function hideMainSections() {
-    $$('.hero,.profile,.stats,.menu,.section-heading').forEach(el => {
-      el.style.display = 'none';
-    });
+    $$('.hero,.profile,.stats,.menu,.section-heading')
+      .forEach(el => el.style.display = 'none');
 
-    ['gamesHub', 'chessScreen', 'ratingSection'].forEach(id => {
+    ['gamesHub','chessScreen','ratingSection'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.style.display = 'none';
     });
   }
 
   function setNavActive(page) {
-    $$('.nav-item').forEach(el => {
-      el.classList.toggle('active', el.dataset.page === page);
-    });
+    $$('.nav-item').forEach(el =>
+      el.classList.toggle('active', el.dataset.page === page)
+    );
   }
 
   function showHome() {
     hideMainSections();
-    $$('.hero,.profile,.stats,.menu,.section-heading').forEach(el => {
-      el.style.display = '';
-    });
-
+    $$('.hero,.profile,.stats,.menu,.section-heading')
+      .forEach(el => el.style.display = '');
     setNavActive('home');
     ensureHomePlayButton();
   }
 
   function showGames() {
     hideMainSections();
-    const screen = $('#gamesHub');
-    if (screen) screen.style.display = 'block';
+    const s = $('#gamesHub');
+    if (s) s.style.display = 'block';
+    $$('.section-heading', s || document).forEach(el => el.style.display = '');
     setNavActive('games');
   }
 
   function showChess() {
     hideMainSections();
-    const screen = $('#chessScreen');
-    if (screen) screen.style.display = 'block';
+    const s = $('#chessScreen');
+    if (s) s.style.display = 'block';
     setNavActive('games');
     initChessUI();
   }
 
   function showRating() {
     hideMainSections();
-    const screen = $('#ratingSection');
-    if (screen) screen.style.display = 'block';
+    const s = $('#ratingSection');
+    if (s) s.style.display = 'block';
     setNavActive('rating');
     loadProfile();
     loadLeaderboard();
   }
 
-  // Register/profile
   async function register() {
     if (!tg?.initData) return null;
     return apiRequest('/api/register', {
-      method: 'POST',
-      body: JSON.stringify({ initData: tg.initData })
+      method:'POST',
+      body:JSON.stringify({initData:tg.initData})
     });
   }
 
-  function modeProfile(p, selectedMode = mode) {
-    const mr = p?.mode_ratings?.[selectedMode];
-    return mr ? { ...p, ...mr } : p;
+  function modeProfile(p,m=mode) {
+    const mr = p?.mode_ratings?.[m];
+    return mr ? {...p,...mr} : p;
   }
 
   async function loadProfile() {
     if (!uid) return;
     try {
-      const data = await apiRequest(`/api/player/${encodeURIComponent(uid)}`);
-      myProfile = data.player || data;
+      const d = await apiRequest(`/api/player/${encodeURIComponent(uid)}`);
+      myProfile = d.player || d;
       renderProfile();
-    } catch (error) {
-      console.warn('Profile load:', error);
+    } catch(e) {
+      console.warn('Profile:', e);
     }
   }
 
@@ -602,61 +410,65 @@ document.addEventListener('DOMContentLoaded', () => {
     const p = myProfile;
     if (!p) return;
 
-    const nameNode = $('#username');
-    if (nameNode) nameNode.textContent = displayName(p);
+    const n = $('#username');
+    if (n) n.textContent = displayName(p);
 
-    const ratingNode = $('#elo');
-    if (ratingNode) ratingNode.textContent = elo(modeProfile(p));
+    const rating = $('#elo');
+    if (rating) rating.textContent = elo(modeProfile(p));
 
-    const rankNode = $('#rank');
-    if (rankNode) rankNode.textContent = rankName(modeProfile(p));
+    const rank = $('#rank');
+    if (rank) rank.textContent = rankName(modeProfile(p));
 
-    const winsNode = $('#wins');
-    if (winsNode) winsNode.textContent = p.wins ?? 0;
+    const wins = $('#wins');
+    if (wins) wins.textContent = p.wins ?? 0;
 
-    const lossesNode = $('#losses');
-    if (lossesNode) lossesNode.textContent = p.losses ?? 0;
+    const losses = $('#losses');
+    if (losses) losses.textContent = p.losses ?? 0;
   }
 
   async function loadLeaderboard() {
-    const container = $('#leaderboard');
+    const container = $('#leaderboard') || $('#ratingList');
     if (!container) return;
 
     try {
-      const data = await apiRequest(`/api/leaderboard?mode=${encodeURIComponent(leaderboardMode)}`);
-      const list = data.leaderboard || data.players || [];
+      const d = await apiRequest(
+        `/api/leaderboard?mode=${encodeURIComponent(leaderboardMode)}`
+      );
 
-      container.innerHTML = list.map((p, index) => `
-        <div class="rq-leader-row ${String(p.id) === uid ? 'me' : ''}">
-          <strong>${index + 1}</strong>
-          ${avatarHTML(p, 'small')}
+      const list = d.leaderboard || d.players || [];
+
+      container.innerHTML = list.map((p,i) => `
+        <div class="rq-leader-row ${String(p.id)===uid?'me':''}">
+          <strong>${i+1}</strong>
+          ${avatarHTML(p,'small')}
           <div style="flex:1;min-width:0">
             <div style="font-weight:900;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
               ${escapeHTML(displayName(p))}
             </div>
-            <div style="color:#888;font-size:10px">${escapeHTML(rankName(modeProfile(p, leaderboardMode)))}</div>
+            <div style="color:#888;font-size:10px">
+              ${escapeHTML(rankName(modeProfile(p,leaderboardMode)))}
+            </div>
           </div>
-          <strong style="color:#f44">${elo(modeProfile(p, leaderboardMode))}</strong>
+          <strong style="color:#f44">${elo(modeProfile(p,leaderboardMode))}</strong>
         </div>
-      `).join('');
-    } catch (error) {
-      console.warn('Leaderboard:', error);
+      `).join('') || '<div style="color:#888;padding:12px">Пока нет игроков в рейтинге</div>';
+
+    } catch(e) {
+      console.warn('Leaderboard:', e);
       container.innerHTML = '<div style="color:#888;padding:12px">Не удалось загрузить рейтинг</div>';
     }
   }
 
-  // Chess UI
   function initChessUI() {
     const mount = $('#chessMount');
     if (!mount || chessUIReady) return;
-
     chessUIReady = true;
 
     mount.innerHTML = `
       <div class="rq-mode-selector">
-        <button class="rq-mode-btn selected" data-mode="bullet">ПУЛЯ<span>2 мин</span></button>
-        <button class="rq-mode-btn" data-mode="blitz">БЛИЦ<span>5 мин</span></button>
-        <button class="rq-mode-btn" data-mode="rapid">РАПИД<span>10 мин</span></button>
+        <button type="button" class="rq-mode-btn" data-mode="bullet">ПУЛЯ<span>2 мин</span></button>
+        <button type="button" class="rq-mode-btn selected" data-mode="blitz">БЛИЦ<span>5 мин</span></button>
+        <button type="button" class="rq-mode-btn" data-mode="rapid">РАПИД<span>10 мин</span></button>
       </div>
 
       <div class="rq-chess-players">
@@ -669,9 +481,11 @@ document.addEventListener('DOMContentLoaded', () => {
         <div id="rqBlackClock" class="rq-clock">05:00</div>
       </div>
 
-      <div id="rqChessStatus" class="rq-chess-status">Выбери режим и создай комнату</div>
+      <div id="rqChessStatus" class="rq-chess-status">
+        Выбери режим и создай комнату
+      </div>
 
-      <div id="rqChessBoard" class="rq-chess-board"></div>
+      <div id="rqChessBoard" class="rq-chess-board" aria-label="Шахматная доска"></div>
 
       <div class="rq-chess-actions">
         <button id="rqCreateRoom" class="primary" type="button">Создать комнату</button>
@@ -679,8 +493,8 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
 
       <div class="rq-room-code-row">
-        <input id="rqRoomCode" type="text" placeholder="Код комнаты" autocomplete="off">
-        <button id="rqCopyCode" type="button">Копировать</button>
+        <input id="rqRoomCode" type="text" placeholder="Код комнаты" autocomplete="off" aria-label="Код комнаты">
+        <button id="rqCopyCode" type="button">Копировать код</button>
       </div>
 
       <div id="rqRoomControls" style="display:none">
@@ -695,23 +509,27 @@ document.addEventListener('DOMContentLoaded', () => {
     loadChessLibrary();
     renderBoard();
     renderClocks();
+    updateModeButtons();
   }
 
-  // Load chess.js
   function loadChessLibrary() {
     if (window.Chess) {
       setupChess();
       return;
     }
 
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js';
-    script.onload = setupChess;
-    script.onerror = () => {
-      status('Не удалось загрузить шахматную библиотеку');
-      toast('Ошибка загрузки chess.js');
+    if (document.querySelector('script[data-requiem-chess]')) return;
+
+    const s = document.createElement('script');
+    s.dataset.requiemChess = '1';
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js';
+    s.onload = setupChess;
+    s.onerror = () => {
+      status('Не удалось загрузить chess.js. Проверь интернет.');
+      toast('Ошибка загрузки шахмат');
     };
-    document.head.appendChild(script);
+
+    document.head.appendChild(s);
   }
 
   function setupChess() {
@@ -719,55 +537,28 @@ document.addEventListener('DOMContentLoaded', () => {
       chess = new window.Chess();
       chessReady = true;
       renderBoard();
-    } catch (error) {
-      console.error('Chess init error:', error);
-      status('Ошибка инициализации шахмат');
+    } catch(e) {
+      console.error(e);
+      status('Не удалось запустить шахматы');
     }
   }
 
-  // SVG chess pieces
-  function pieceSVG(type, side) {
-    const white = side === 'white';
-    const fill = white ? '#ff5067' : '#151515';
-    const stroke = white ? '#ffd0d8' : '#c7c7c7';
-    const glow = white ? 'filter="drop-shadow(0 0 3px #f32649)"' : '';
-
-    const paths = {
-      p: `<path d="M50 20a13 13 0 1 0 0 26a13 13 0 1 0 0-26ZM34 48h32l-5 10H39zM29 61h42l5 8H24z"/>`,
-      r: `<path d="M25 20h15v12h20V20h15v23H25zM34 46h32l-7 12H39zM24 61h52l5 8H19z"/>`,
-      n: `<path d="M25 67h52l-5 9H28zM31 63c0-20 8-29 24-37l10 9 10 5-7 17-11 5zM52 31l-9 5 5 6 8-5z"/>`,
-      b: `<path d="M50 15c13 10 14 19 6 28L42 34c-6-8-4-14 8-19zM38 43h24l-4 12H42zM29 58h42l6 9H23z"/>`,
-      q: `<path d="M23 23a6 6 0 1 0 0-12a6 6 0 1 0 0 12M40 19a6 6 0 1 0 0-12a6 6 0 1 0 0 12M60 19a6 6 0 1 a 0-12a6 6 0 1 0 0 12M77 23a6 6 0 1 a 0-12a6 6 0 1 а 0 12M22 30l15 12 13-15 13 15 15-12-10 30H32zM27 62h46l7 8H20z"/>`,
-      k: `<path d="M44 9h12v17h14v12H56v15H44V38H30V26h14zM35 55h30l-5 10H40zM25 67h50l5 8H20z"/>`
-    };
-
-    return `
-      <svg class="rq-piece" viewBox="0 0 100 85" ${glow}
-        xmlns="http://www.w3.org/2000/svg">
-        <g fill="${fill}" stroke="${stroke}" stroke-width="3"
-          stroke-linejoin="round" stroke-linecap="round">
-          ${paths[type] || paths.p}
-        </g>
-      </svg>
-    `;
-  }
-
-  // Player cards
-  function playerCard(profile, color) {
+  function playerCard(profile,color) {
     const node = color === 'white' ? $('#rqWhitePlayer') : $('#rqBlackPlayer');
     if (!node) return;
 
-    const active = chess && chess.turn() === (color === 'white' ? 'w' : 'b')
-      && game.started && !game.over;
+    const active = chess &&
+      chess.turn() === (color === 'white' ? 'w' : 'b') &&
+      game.started && !game.over;
 
-    const p = profile || (color === playerColor
-      ? myProfile
-      : null);
+    const p = profile || (color === playerColor ? myProfile : null);
 
     if (!p) {
       node.innerHTML = `
         <div class="rq-player-card">
-          <div class="rq-avatar"><span>${color === 'white' ? 'W' : 'B'}</span></div>
+          <div class="rq-avatar">
+            <span>${color === 'white' ? '♔' : '♚'}</span>
+          </div>
           <div class="rq-player-info">
             <div class="rq-player-name">${color === 'white' ? 'Белые' : 'Чёрные'}</div>
             <div class="rq-player-username">Ожидание игрока</div>
@@ -778,16 +569,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const mp = modeProfile(p);
+
     node.innerHTML = `
-      <div class="rq-player-card ${active ? 'turn-active' : ''}">
+      <div class="rq-player-card ${active?'turn-active':''}">
         ${avatarHTML(p)}
         <div class="rq-player-info">
           <div class="rq-player-name">${escapeHTML(displayName(p))}</div>
           <div class="rq-player-username">${escapeHTML(username(p))}</div>
-          <div class="rq-player-rank">${escapeHTML(rankName(mp))} · ${elo(mp)} ELO</div>
+          <div class="rq-player-rank">
+            ${escapeHTML(rankName(mp))} · ${elo(mp)} ELO
+          </div>
           <div class="rq-player-stats">
-            <span>В ${mp.wins ?? p.wins ?? 0}</span>
-            <span>П ${mp.losses ?? p.losses ?? 0}</span>
+            <span>В ${mp.wins??p.wins??0}</span>
+            <span>П ${mp.losses??p.losses??0}</span>
           </div>
         </div>
       </div>
@@ -797,36 +591,31 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateProfiles(data) {
     if (!data) return;
     profiles = data;
-    playerCard(profiles.white, 'white');
-    playerCard(profiles.black, 'black');
+    playerCard(profiles.white,'white');
+    playerCard(profiles.black,'black');
   }
 
-  // Create/join room
   async function createRoom() {
-    if (!uid || !tg?.initData) return toast('Открой Mini App через Telegram');
+    if (!uid || !tg?.initData)
+      return toast('Открой Mini App через Telegram');
+
     if (roomId) return toast('Сначала покинь текущую комнату');
 
-    const button = $('#rqCreateRoom');
-    if (button) button.disabled = true;
+    const b = $('#rqCreateRoom');
+    if (b) b.disabled = true;
 
     try {
       await register();
-      const data = await apiRequest('/api/chess/create', {
-        method: 'POST',
-        body: JSON.stringify({
-          initData: tg.initData,
-          mode
-        })
+
+      const d = await apiRequest('/api/chess/create', {
+        method:'POST',
+        body:JSON.stringify({initData:tg.initData,mode})
       });
 
-      roomId = data.room_id || data.code || data.id;
+      roomId = d.room_id || d.code || d.id;
       if (!roomId) throw new Error('Сервер не вернул код комнаты');
 
-      game.connected = false;
-      game.started = false;
-      game.over = false;
-      game.locked = true;
-      resultShown = false;
+      resetRoomState();
 
       const input = $('#rqRoomCode');
       if (input) input.value = roomId;
@@ -834,30 +623,33 @@ document.addEventListener('DOMContentLoaded', () => {
       const controls = $('#rqRoomControls');
       if (controls) controls.style.display = 'block';
 
-      const resultNode = $('#rqResult');
-      if (resultNode) resultNode.innerHTML = '';
+      const result = $('#rqResult');
+      if (result) result.innerHTML = '';
 
       connectSocket(roomId);
       status(`${modeLabel()} · Комната создана. Ждём соперника...`);
       renderClocks();
-    } catch (error) {
-      console.error('Create room:', error);
-      toast(error.message || 'Ошибка создания комнаты');
+
+    } catch(e) {
+      console.error('Create room:', e);
+      toast(e.message||'Ошибка создания комнаты');
       roomId = null;
     } finally {
-      if (button) button.disabled = false;
+      if (b) b.disabled = false;
     }
   }
 
   async function joinRoom() {
-    if (!uid || !tg?.initData) return toast('Открой Mini App через Telegram');
+    if (!uid || !tg?.initData)
+      return toast('Открой Mini App через Telegram');
+
     if (roomId) return toast('Сначала покинь текущую комнату');
 
-    const code = ($('#rqRoomCode')?.value || '').trim();
-    if (!code) return toast('Введи код комнаты в поле выше');
+    const code = $('#rqRoomCode')?.value.trim();
+    if (!code) return toast('Введи код комнаты');
 
-    const button = $('#rqJoinRoom');
-    if (button) button.disabled = true;
+    const b = $('#rqJoinRoom');
+    if (b) b.disabled = true;
 
     try {
       await register();
@@ -868,24 +660,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
       connectSocket(roomId);
       status('Подключение к комнате...');
-    } catch (error) {
-      console.error('Join room:', error);
-      toast(error.message || 'Не удалось войти');
+
+    } catch(e) {
+      console.error('Join room:', e);
+      toast(e.message||'Не удалось войти');
       roomId = null;
     } finally {
-      if (button) button.disabled = false;
+      if (b) b.disabled = false;
     }
   }
 
-  // WebSocket
+  function resetRoomState() {
+    game.connected = false;
+    game.started = false;
+    game.over = false;
+    game.locked = true;
+    resultShown = false;
+    selectedSquare = null;
+    legalMoves = [];
+    lastMove = [];
+    profiles = {};
+    clocks.white = clocks.black = MODES[mode].seconds;
+  }
+
   function connectSocket(id) {
     closeSocket();
 
-    const url = `wss://requiem-bot-7eyu.onrender.com/ws/chess/${encodeURIComponent(id)}?initData=${encodeURIComponent(tg?.initData || '')}`;
+    const url = `wss://requiem-bot-7eyu.onrender.com/ws/chess/${encodeURIComponent(id)}?initData=${encodeURIComponent(tg?.initData||'')}`;
 
     try {
       socket = new WebSocket(url);
-    } catch (error) {
+    } catch(e) {
       toast('Не удалось открыть WebSocket');
       return;
     }
@@ -897,18 +702,15 @@ document.addEventListener('DOMContentLoaded', () => {
       status('Соединение установлено. Ожидание состояния игры...');
     };
 
-    socket.onmessage = event => {
+    socket.onmessage = e => {
       try {
-        receiveState(JSON.parse(event.data));
-      } catch (error) {
-        console.error('WS message parse:', error);
+        receiveState(JSON.parse(e.data));
+      } catch(err) {
+        console.error('WS parse:', err);
       }
     };
 
-    socket.onerror = () => {
-      console.error('Chess WebSocket error');
-      status('Ошибка соединения');
-    };
+    socket.onerror = () => status('Ошибка соединения');
 
     socket.onclose = () => {
       game.connected = false;
@@ -921,99 +723,110 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.onclose = null;
     try {
       socket.close();
-    } catch (_) {}
+    } catch(e) {}
     socket = null;
   }
 
-  function receiveState(data) {
-    if (!data || typeof data !== 'object') return;
-    if (data.error) {
-      toast(data.error);
+  function receiveState(d) {
+    if (!d || typeof d !== 'object') return;
+    if (d.error) {
+      toast(d.error);
       return;
     }
 
-    if (data.room_id) roomId = data.room_id;
-    if (data.color) playerColor = normalizeColor(data.color) || playerColor;
-    if (data.mode && MODES[data.mode]) {
-      mode = data.mode;
+    if (d.room_id) roomId = d.room_id;
+    if (d.color) playerColor = normalizeColor(d.color) || playerColor;
+
+    if (d.mode && MODES[d.mode]) {
+      mode = d.mode;
       updateModeButtons();
     }
-    if (data.initial_time) clocks.white = clocks.black = Number(data.initial_time);
-    if (data.profiles) updateProfiles(data.profiles);
 
-    if (typeof data.started === 'boolean') game.started = data.started;
-    else if (Array.isArray(data.players)) game.started = data.players.length >= 2;
+    if (d.initial_time)
+      clocks.white = clocks.black = Number(d.initial_time);
 
-    if (data.clocks) {
-      if (data.clocks.white != null) clocks.white = Number(data.clocks.white);
-      if (data.clocks.black != null) clocks.black = Number(data.clocks.black);
+    if (d.profiles) updateProfiles(d.profiles);
+
+    if (typeof d.started === 'boolean')
+      game.started = d.started;
+    else if (Array.isArray(d.players))
+      game.started = d.players.length >= 2;
+
+    if (d.clocks) {
+      if (d.clocks.white != null) clocks.white = Number(d.clocks.white);
+      if (d.clocks.black != null) clocks.black = Number(d.clocks.black);
     }
 
-    if (data.fen && chessReady && chess) {
+    if (d.fen && chessReady && chess) {
       try {
-        chess.load(data.fen);
+        chess.load(d.fen);
         selectedSquare = null;
         legalMoves = [];
         renderBoard();
-      } catch (error) {
-        console.warn('Invalid FEN from server:', error);
+      } catch(e) {
+        console.warn('Bad server FEN', e);
       }
     }
 
-    if (data.turn !== undefined) {
-      const turn = normalizeTurn(data.turn);
-      const myTurn = turn === (playerColor === 'white' ? 'w' : 'b');
-      game.locked = !game.started || !myTurn || game.over;
+    if (d.turn !== undefined) {
+      const turn = normalizeTurn(d.turn);
+      const mine = turn === (playerColor === 'white' ? 'w' : 'b');
+
+      game.locked = !game.started || !mine || game.over;
 
       if (!game.over) {
-        status(!game.started
-          ? 'Ожидаем второго игрока...'
-          : (myTurn ? 'Ваш ход' : 'Ход соперника'));
+        status(
+          !game.started
+            ? 'Ожидаем второго игрока...'
+            : mine
+              ? 'Ваш ход'
+              : 'Ход соперника'
+        );
       }
     }
 
     renderClocks();
 
-    if (data.game_over && !game.over) {
+    if (d.game_over && !game.over) {
       game.over = true;
       game.locked = true;
       stopClock();
-      showResult(data.result);
+      showResult(d.result);
     }
 
-    if (game.started && !game.over && !clockInterval) startDisplayClock();
+    if (game.started && !game.over && !clockInterval)
+      startDisplayClock();
   }
 
   function updateModeButtons() {
-    $$('.rq-mode-btn').forEach(button => {
-      button.classList.toggle('selected', button.dataset.mode === mode);
-    });
+    $$('.rq-mode-btn').forEach(b =>
+      b.classList.toggle('selected', b.dataset.mode === mode)
+    );
   }
 
-  function status(message) {
-    const node = $('#rqChessStatus');
-    if (node) node.textContent = message;
+  function status(msg) {
+    const n = $('#rqChessStatus');
+    if (n) n.textContent = msg;
   }
 
-  // Clocks
   function renderClocks() {
-    const white = $('#rqWhiteClock');
-    const black = $('#rqBlackClock');
+    const w = $('#rqWhiteClock');
+    const b = $('#rqBlackClock');
 
-    if (white) {
-      white.textContent = formatTime(clocks.white);
-      white.classList.toggle('active', game.started && chess?.turn() === 'w');
-      white.classList.toggle('danger', clocks.white <= 20);
+    if (w) {
+      w.textContent = formatTime(clocks.white);
+      w.classList.toggle('active', game.started && chess?.turn() === 'w');
+      w.classList.toggle('danger', clocks.white <= 20);
     }
 
-    if (black) {
-      black.textContent = formatTime(clocks.black);
-      black.classList.toggle('active', game.started && chess?.turn() === 'b');
-      black.classList.toggle('danger', clocks.black <= 20);
+    if (b) {
+      b.textContent = formatTime(clocks.black);
+      b.classList.toggle('active', game.started && chess?.turn() === 'b');
+      b.classList.toggle('danger', clocks.black <= 20);
     }
 
-    playerCard(profiles.white, 'white');
-    playerCard(profiles.black, 'black');
+    playerCard(profiles.white,'white');
+    playerCard(profiles.black,'black');
   }
 
   function stopClock() {
@@ -1028,98 +841,82 @@ document.addEventListener('DOMContentLoaded', () => {
     clockInterval = setInterval(() => {
       if (!game.started || game.over || !chess) return;
 
-      const elapsed = (Date.now() - clockTick) / 1000;
+      const dt = (Date.now() - clockTick) / 1000;
       clockTick = Date.now();
 
-      if (chess.turn() === 'w') {
-        clocks.white = Math.max(0, clocks.white - elapsed);
-      } else {
-        clocks.black = Math.max(0, clocks.black - elapsed);
-      }
+      if (chess.turn() === 'w')
+        clocks.white = Math.max(0, clocks.white - dt);
+      else
+        clocks.black = Math.max(0, clocks.black - dt);
 
       renderClocks();
     }, 500);
   }
 
-  // Board
   function renderBoard() {
-    const boardEl = $('#rqChessBoard');
-    if (!boardEl) return;
+    const board = $('#rqChessBoard');
+    if (!board) return;
 
     if (!chessReady || !chess) {
-      boardEl.innerHTML = `
+      board.innerHTML = `
         <div style="grid-column:1/9;display:flex;align-items:center;justify-content:center;color:#888">
-          Загрузка шахмат...
-        </div>
-      `;
+          Загрузка шахмат…
+        </div>`;
       return;
     }
 
     const rows = chess.board();
-    const files = ['a','b','c','d','e','f','g','h'];
-    let markup = '';
+    const files = 'abcdefgh';
+    let html = '';
 
     for (let r = 0; r < 8; r++) {
       for (let c = 0; c < 8; c++) {
-        const square = files[c] + (8 - r);
-        const piece = rows[r][c];
-        const light = (r + c) % 2 === 0;
-        const isSelected = selectedSquare === square;
-        const isLegal = legalMoves.some(m => m.to === square);
-        const isCapture = isLegal && !!chess.get(square);
+        const sq = files[c] + (8-r);
+        const p = rows[r][c];
+        const light = (r+c)%2 === 0;
+        const sel = selectedSquare === sq;
+        const legal = legalMoves.some(m => m.to === sq);
+        const capture = legal && !!chess.get(sq);
 
-        const classNames = [
-          'rq-square',
-          light ? 'light' : 'dark'
-        ];
+        const classes = ['rq-square', light?'light':'dark'];
+        if (sel) classes.push('selected');
+        if (lastMove.includes(sq)) classes.push('last-move');
+        if (legal) classes.push(capture?'capture':'legal');
 
-        if (isSelected) classNames.push('selected');
-        if (lastMove.includes(square)) classNames.push('last-move');
-        if (isLegal) classNames.push(isCapture ? 'capture' : 'legal');
+        let piece = '';
 
-        let pieceMarkup = '';
-
-        if (piece) {
-          const side = piece.color === 'w' ? 'white' : 'black';
-          pieceMarkup = `
-            <img class="rq-piece"
-              draggable="false"
-              alt="${side} ${piece.type}"
-              src="${pieceSVG(piece.type, side)}">
-          `;
+        if (p) {
+          const side = p.color === 'w' ? 'white' : 'black';
+          piece = `<span class="rq-piece ${side}" aria-label="${side==='white'?'Белая':'Чёрная'} ${p.type}">
+            ${PIECES[p.color][p.type]}
+          </span>`;
         }
 
-        markup += `
-          <div class="${classNames.join(' ')}"
-            data-square="${square}"
-            role="button"
-            aria-label="${square}">
-            ${pieceMarkup}
-          </div>
-        `;
+        html += `<div class="${classes.join(' ')}" data-square="${sq}" role="button" aria-label="${sq}">${piece}</div>`;
       }
     }
 
-    boardEl.innerHTML = markup;
+    board.innerHTML = html;
   }
 
-  function onSquareClick(square) {
-    if (!chessReady || !chess || !game.connected || game.locked || game.over || !game.started) return;
+  function onSquareClick(sq) {
+    if (!chessReady || !chess || !game.connected || game.locked || game.over || !game.started)
+      return;
 
-    const myColor = playerColor === 'white' ? 'w' : 'b';
-    const piece = chess.get(square);
+    const mine = playerColor === 'white' ? 'w' : 'b';
+    const p = chess.get(sq);
 
     if (selectedSquare) {
-      const destination = legalMoves.find(move => move.to === square);
-      if (destination) {
-        sendMove(selectedSquare, square, destination);
+      const m = legalMoves.find(x => x.to === sq);
+      if (m) {
+        sendMove(selectedSquare, sq, m);
         return;
       }
     }
 
-    if (piece && piece.color === myColor && chess.turn() === myColor) {
-      selectedSquare = square;
-      legalMoves = chess.moves({ square, verbose: true });
+    if (p && p.color === mine && chess.turn() === mine) {
+      selectedSquare = sq;
+      legalMoves = chess.moves({square:sq, verbose:true});
       renderBoard();
       return;
     }
@@ -1129,27 +926,25 @@ document.addEventListener('DOMContentLoaded', () => {
     renderBoard();
   }
 
-  function sendMove(from, to, move) {
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
+  function sendMove(from,to,m) {
+    if (!socket || socket.readyState !== WebSocket.OPEN)
       return toast('Нет соединения с сервером');
-    }
 
-    const promotion = move?.promotion || (move?.flags?.includes('p') ? 'q' : undefined);
+    const promotion = m?.promotion || (m?.flags?.includes('p') ? 'q' : undefined);
 
     socket.send(JSON.stringify({
-      type: 'move',
+      type:'move',
       from,
       to,
       promotion
     }));
 
-    lastMove = [from, to];
+    lastMove = [from,to];
     selectedSquare = null;
     legalMoves = [];
     renderBoard();
   }
 
-  // Result/copy/leave
   function showResult(value) {
     if (resultShown) return;
     resultShown = true;
@@ -1158,20 +953,20 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!box) return;
 
     let title = 'НИЧЬЯ';
-    let subtitle = 'Партия завершилась вничью';
+    let sub = 'Партия завершилась вничью';
 
     if (value === 'white' || value === '1-0') {
       title = playerColor === 'white' ? 'ПОБЕДА' : 'ПОРАЖЕНИЕ';
-      subtitle = 'Победили белые';
+      sub = 'Победили белые';
     } else if (value === 'black' || value === '0-1') {
       title = playerColor === 'black' ? 'ПОБЕДА' : 'ПОРАЖЕНИЕ';
-      subtitle = 'Победили чёрные';
+      sub = 'Победили чёрные';
     }
 
     box.innerHTML = `
       <div class="rq-result">
         <h2>${title}</h2>
-        <div style="color:#aaa">${subtitle}</div>
+        <div style="color:#aaa">${sub}</div>
         <div style="color:#777;font-size:11px;margin-top:8px">
           ${modeLabel()} · ${MODES[mode].label}
         </div>
@@ -1185,23 +980,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function copyRoomCode() {
     const code = ($('#rqRoomCode')?.value || roomId || '').trim();
-
     if (!code) return toast('Код комнаты отсутствует');
 
     try {
       await navigator.clipboard.writeText(code);
       toast('Код скопирован');
-    } catch (_) {
+    } catch(e) {
       const input = $('#rqRoomCode');
-
       if (input) {
         input.focus();
         input.select();
-
         try {
           document.execCommand('copy');
           toast('Код скопирован');
-        } catch (e) {
+        } catch(err) {
           toast('Не удалось скопировать');
         }
       } else {
@@ -1229,59 +1021,70 @@ document.addEventListener('DOMContentLoaded', () => {
 
     clocks.white = clocks.black = MODES[mode].seconds;
 
-    if (chessReady && window.Chess) {
+    if (chessReady && window.Chess)
       chess = new window.Chess();
-    }
 
-    playerCard(null, 'white');
-    playerCard(null, 'black');
+    playerCard(null,'white');
+    playerCard(null,'black');
     renderBoard();
 
     const controls = $('#rqRoomControls');
     if (controls) controls.style.display = 'none';
 
-    const resultBox = $('#rqResult');
-    if (resultBox) resultBox.innerHTML = '';
+    const result = $('#rqResult');
+    if (result) result.innerHTML = '';
+
+    const input = $('#rqRoomCode');
+    if (input) input.value = '';
 
     status('Выбери режим и создай комнату');
     renderClocks();
   }
 
-  // Events — delegated, so work after dynamic rendering
   document.addEventListener('click', event => {
-    const target = event.target;
-    if (!(target instanceof Element)) return;
+    const t = event.target;
+    if (!(t instanceof Element)) return;
 
-    const homePlay = target.closest('#rqHomePlay');
-    if (homePlay) {
+    const home = t.closest('#rqHomePlay');
+    if (home) {
       event.preventDefault();
       showGames();
       return;
     }
 
-   const oldPlay = target.closest('#openChess');
-if (oldPlay) {
-  event.preventDefault();
-  event.stopPropagation();
-  showChess();
-  return;
-}
-
-    const nav = target.closest('.nav-item[data-page]');
-    if (nav) {
+    const chessBtn = t.closest('#openChess');
+    if (chessBtn) {
       event.preventDefault();
-      const page = nav.dataset.page;
-      if (page === 'home') showHome();
-      else if (page === 'games') showGames();
-      else if (page === 'rating') showRating();
+      showChess();
       return;
     }
 
-    const modeBtn = target.closest('.rq-mode-btn');
-    if (modeBtn) {
-      const next = modeBtn.dataset.mode;
-      if (MODES[next] && !roomId) {
-        mode = next;
+    const back = t.closest('#backToGames');
+    if (back) {
+      event.preventDefault();
+      showGames();
+      return;
+    }
+
+    const nav = t.closest('.nav-item[data-page]');
+    if (nav) {
+      event.preventDefault();
+      const page = nav.dataset.page;
+
+      if (page === 'home') showHome();
+      else if (page === 'games') showGames();
+      else if (page === 'rating') showRating();
+      else if (page === 'profile') showHome();
+      else if (page === 'collection' || page === 'tasks' || page === 'bonus' || page === 'crystals')
+        toast('Раздел пока в разработке');
+
+      return;
+    }
+
+    const mb = t.closest('.rq-mode-btn');
+    if (mb) {
+      if (MODES[mb.dataset.mode] && !roomId) {
+        mode = mb.dataset.mode;
         clocks.white = clocks.black = MODES[mode].seconds;
         updateModeButtons();
         renderClocks();
@@ -1291,57 +1094,63 @@ if (oldPlay) {
       return;
     }
 
-    if (target.closest('#rqCreateRoom')) return createRoom();
-    if (target.closest('#rqJoinRoom')) return joinRoom();
-    if (target.closest('#rqCopyCode')) return copyRoomCode();
-    if (target.closest('#rqLeaveRoom')) return leaveRoom();
-    if (target.closest('#rqNewGame')) {
+    if (t.closest('#rqCreateRoom')) {
+      createRoom();
+      return;
+    }
+
+    if (t.closest('#rqJoinRoom')) {
+      joinRoom();
+      return;
+    }
+
+    if (t.closest('#rqCopyCode')) {
+      copyRoomCode();
+      return;
+    }
+
+    if (t.closest('#rqLeaveRoom')) {
+      leaveRoom();
+      return;
+    }
+
+    if (t.closest('#rqNewGame')) {
       leaveRoom();
       showChess();
       return;
     }
 
-    const square = target.closest('.rq-square[data-square]');
-    if (square) {
-      onSquareClick(square.dataset.square);
+    const sq = t.closest('.rq-square[data-square]');
+    if (sq) {
+      onSquareClick(sq.dataset.square);
       return;
     }
 
-    const leaderboardModeBtn = target.closest('[data-leaderboard-mode]');
-    if (leaderboardModeBtn) {
-      leaderboardMode = leaderboardModeBtn.dataset.leaderboardMode;
+    const lb = t.closest('[data-leaderboard-mode]');
+    if (lb) {
+      leaderboardMode = lb.dataset.leaderboardMode;
       loadLeaderboard();
+      return;
+    }
+
+    const button = t.closest('button');
+    if (button) {
+      const txt = button.textContent.trim().replace(/\s+/g,' ');
+      if (txt === 'Играть' || txt === 'ИГРАТЬ' || txt.startsWith('ИГРАТЬ '))
+        showGames();
     }
   });
 
-  // Main buttons that may be dynamically replaced
-  document.addEventListener('click', event => {
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-
-    const playButton = target.closest('button');
-    if (!playButton) return;
-
-    const text = playButton.textContent.trim().replace(/\s+/g, ' ');
-    if (text === 'Играть' || text === 'ИГРАТЬ' || text.startsWith('ИГРАТЬ ')) {
-      event.preventDefault();
-      showGames();
-    }
-  });
-
-  // Startup
   async function startApp() {
     ensureHomePlayButton();
-
-    if (user && $('#username')) {
+    if (user && $('#username'))
       $('#username').textContent = displayName(user);
-    }
 
     await register();
     await loadProfile();
-    loadLeaderboard();
+    await loadLeaderboard();
   }
 
   showHome();
-  startApp().catch(error => console.error('REQUIEM startup error:', error));
+  startApp().catch(e => console.error('REQUIEM startup:', e));
 });
