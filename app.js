@@ -5,7 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const API = 'https://requiem-bot-7eyu.onrender.com';
   const tg = window.Telegram?.WebApp || null;
   const user = tg?.initDataUnsafe?.user || null;
-  const uid = user?.id ? String(user.id) : null;
+  ${pieceSVG(piece, color)}
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
