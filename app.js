@@ -2,52 +2,51 @@
 document.addEventListener('DOMContentLoaded', () => {
     'use strict';
 
-    // ==========================================
-    // REQUIEM — CHESS CLIENT
-    // ==========================================
+    // =============================================
+    // REQUIEM CHESS — STABLE CLIENT
+    // =============================================
 
     const tg = window.Telegram?.WebApp;
-    const API_URL = 'https://requiem-bot-7eyu.onrender.com';
+    const API = 'https://requiem-bot-7eyu.onrender.com';
 
-    const $ = (selector, root = document) => root.querySelector(selector);
-    const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+    const $ = (s, r = document) => r.querySelector(s);
+    const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
-    const currentUser = tg?.initDataUnsafe?.user || null;
-    const playerId = currentUser?.id ? String(currentUser.id) : null;
+    const user = tg?.initDataUnsafe?.user || null;
+    const uid = user?.id ? String(user.id) : null;
 
     const MODES = {
-        bullet: { name: 'ПУЛЯ', time: 120, label: '2 мин' },
-        blitz:  { name: 'БЛИЦ', time: 300, label: '5 мин' },
-        rapid:  { name: 'РАПИД', time: 600, label: '10 мин' }
+        bullet: { name: 'ПУЛЯ', seconds: 120, label: '2 минуты' },
+        blitz:  { name: 'БЛИЦ', seconds: 300, label: '5 минут' },
+        rapid:  { name: 'РАПИД', seconds: 600, label: '10 минут' }
     };
 
-    let socket = null;
+    let mode = 'blitz';
     let chess = null;
-    let playerColor = null;
-    let roomId = null;
-    let selectedSquare = null;
-    let legalMoves = [];
-    let currentProfiles = {};
-    let currentPlayer = null;
-    let opponentPlayer = null;
-    let chessLoaded = false;
-    let selectedMode = 'blitz';
-    let lastMoveSquares = [];
+    let chessReady = false;
+    let socket = null;
+    let room = null;
+    let color = null;
+    let selected = null;
+    let moves = [];
+    let lastMove = [];
+    let profiles = {};
     let clocks = { white: 300, black: 300 };
-    let clockInterval = null;
-    let lastClockTick = Date.now();
+    let clockTimer = null;
+    let clockTimestamp = 0;
+    let myProfile = null;
+    let gameResultShown = false;
 
-    const state = {
+    const game = {
         connected: false,
-        gameStarted: false,
-        gameOver: false,
-        boardLocked: true,
-        lastFen: null
+        started: false,
+        over: false,
+        locked: true
     };
 
-    // ==========================================
+    // =============================================
     // TELEGRAM
-    // ==========================================
+    // =============================================
 
     if (tg) {
         tg.ready();
@@ -56,90 +55,86 @@ document.addEventListener('DOMContentLoaded', () => {
         tg.setBackgroundColor?.('#080808');
     }
 
-    // ==========================================
+    // =============================================
     // HELPERS
-    // ==========================================
+    // =============================================
 
-    function escapeHTML(value = '') {
-        return String(value).replace(/[&<>"']/g, char => ({
+    function esc(value = '') {
+        return String(value).replace(/[&<>"']/g, c => ({
             '&': '&amp;',
             '<': '&lt;',
             '>': '&gt;',
             '"': '&quot;',
-            "'": '&#039;'
-        })[char]);
+            "'": '&#39;'
+        })[c]);
     }
 
-    function getInitials(name = 'R') {
-        return String(name).trim().slice(0, 1).toUpperCase() || 'R';
+    function displayName(p) {
+        if (!p) return 'Ожидание игрока';
+        return `${p.first_name || ''} ${p.last_name || ''}`.trim()
+            || p.username
+            || `Игрок ${p.id || ''}`;
     }
 
-    function getDisplayName(profile) {
-        if (!profile) return 'Ожидание игрока';
-
-        const full = `${profile.first_name || ''} ${profile.last_name || ''}`.trim();
-
-        return full || profile.username || `Игрок ${profile.id || ''}`;
+    function username(p) {
+        return p?.username ? '@' + p.username.replace(/^@/, '') : 'Telegram';
     }
 
-    function getUsername(profile) {
-        if (!profile?.username) return 'Telegram';
-        return '@' + String(profile.username).replace(/^@/, '');
+    function initials(p) {
+        return displayName(p).charAt(0).toUpperCase() || 'R';
     }
 
-    function getElo(profile) {
-        return Number(profile?.elo ?? profile?.rating ?? 1000);
+    function elo(p) {
+        return Number(p?.elo ?? p?.rating ?? 1000);
     }
 
-    function getRank(profile) {
-        return profile?.rank_label || profile?.rank_name || profile?.rank || 'HUNTER';
+    function rank(p) {
+        return p?.rank_label || p?.rank_name || p?.rank || 'HUNTER';
     }
 
-    function getPhoto(profile) {
-        return profile?.photo_url || profile?.avatar_url || null;
+    function photo(p) {
+        return p?.photo_url || p?.avatar_url || '';
     }
 
-    function avatarHTML(profile, extraClass = '') {
-        const photo = getPhoto(profile);
-        const initial = getInitials(getDisplayName(profile));
-
-        if (photo) {
-            return `
-                <div class="rq-avatar ${extraClass}">
-                    <img src="${escapeHTML(photo)}"
-                         alt=""
-                         referrerpolicy="no-referrer"
-                         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-                    <span style="display:none">${escapeHTML(initial)}</span>
-                </div>
-            `;
-        }
+    function avatar(p, cls = '') {
+        const image = photo(p);
+        const initial = initials(p);
 
         return `
-            <div class="rq-avatar ${extraClass}">
-                <span>${escapeHTML(initial)}</span>
+            <div class="rq-avatar ${cls}">
+                ${image ? `
+                    <img src="${esc(image)}"
+                         onerror="this.remove()"
+                         alt="">
+                ` : ''}
+                <span>${esc(initial)}</span>
             </div>
         `;
     }
 
-    function showToast(message) {
-        let toast = $('#toast');
-
-        if (!toast) {
-            toast = document.createElement('div');
-            toast.id = 'toast';
-            document.body.appendChild(toast);
-        }
-
-        toast.textContent = message;
-        toast.classList.add('show');
-
-        clearTimeout(toast._timer);
-        toast._timer = setTimeout(() => toast.classList.remove('show'), 2600);
+    function fmtTime(value) {
+        const seconds = Math.max(0, Math.floor(Number(value) || 0));
+        return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
     }
 
-    async function api(path, options = {}) {
-        const response = await fetch(API_URL + path, {
+    function toast(message) {
+        let el = $('#toast');
+
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'toast';
+            document.body.appendChild(el);
+        }
+
+        el.textContent = message;
+        el.classList.add('show');
+
+        clearTimeout(el._timer);
+        el._timer = setTimeout(() => el.classList.remove('show'), 2600);
+    }
+
+    async function request(path, options = {}) {
+        const response = await fetch(API + path, {
             ...options,
             headers: {
                 'Content-Type': 'application/json',
@@ -150,385 +145,203 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await response.json().catch(() => ({}));
 
         if (!response.ok) {
-            throw new Error(data.detail || data.error || `Ошибка API ${response.status}`);
+            throw new Error(data.detail || data.error || `HTTP ${response.status}`);
         }
 
         return data;
     }
 
-    function normalizeColor(value) {
-        if (value === 'w' || value === 'white') return 'white';
-        if (value === 'b' || value === 'black') return 'black';
+    function normalizeColor(c) {
+        if (c === 'white' || c === 'w') return 'white';
+        if (c === 'black' || c === 'b') return 'black';
         return null;
     }
 
-    function normalizeTurn(value) {
-        if (value === 'w' || value === 'white') return 'w';
-        if (value === 'b' || value === 'black') return 'b';
-        return value;
+    function normalizeTurn(t) {
+        if (t === 'white') return 'w';
+        if (t === 'black') return 'b';
+        return t;
     }
 
-    function formatTime(seconds) {
-        const safe = Math.max(0, Math.floor(Number(seconds) || 0));
-        const minutes = Math.floor(safe / 60);
-        const secs = safe % 60;
-        return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    function modeName() {
+        return MODES[mode]?.name || 'БЛИЦ';
     }
 
-    // ==========================================
+    // =============================================
     // STYLES
-    // ==========================================
+    // =============================================
 
-    const styles = document.createElement('style');
+    const style = document.createElement('style');
 
-    styles.textContent = `
-        #chessMount {
-            color: #eee;
-        }
+    style.textContent = `
+        #chessMount { color:#eee; }
 
         .rq-avatar {
-            width: 48px;
-            height: 48px;
-            flex-shrink: 0;
-            border-radius: 50%;
-            overflow: hidden;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: linear-gradient(145deg,#351016,#111);
-            border: 2px solid #9d1828;
-            color: #fff;
-            font-size: 19px;
-            font-weight: 900;
-            position: relative;
+            width:46px;height:46px;flex-shrink:0;
+            border-radius:50%;overflow:hidden;position:relative;
+            display:flex;align-items:center;justify-content:center;
+            background:linear-gradient(145deg,#3b111b,#100c0d);
+            border:2px solid #9d1828;color:white;
+            font-weight:900;font-size:18px;
         }
-
         .rq-avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-            position: absolute;
-            inset: 0;
+            position:absolute;inset:0;width:100%;height:100%;
+            object-fit:cover;z-index:2;
         }
-
-        .rq-avatar.large {
-            width: 55px;
-            height: 55px;
-            font-size: 23px;
-        }
-
-        .rq-avatar.small {
-            width: 37px;
-            height: 37px;
-            font-size: 15px;
-        }
+        .rq-avatar.large {width:48px;height:48px;font-size:21px}
+        .rq-avatar.small {width:36px;height:36px;font-size:14px}
 
         .rq-player-card {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 11px;
-            background: #111;
-            border: 1px solid #292020;
-            border-radius: 13px;
-            min-width: 0;
-            overflow: hidden;
+            display:flex;align-items:center;gap:8px;
+            padding:9px;background:#111;
+            border:1px solid #292020;border-radius:12px;
+            min-width:0;overflow:hidden;
         }
-
-        .rq-player-card.active-turn {
-            border-color: #b82038;
-            box-shadow: 0 0 14px #b8203820;
+        .rq-player-card.turn-active {
+            border-color:#c52640;
+            box-shadow:0 0 12px #a3153020;
         }
-
-        .rq-player-info {
-            flex: 1;
-            min-width: 0;
-        }
-
+        .rq-player-info {flex:1;min-width:0}
         .rq-player-name {
-            color: #fff;
-            font-size: 13px;
-            font-weight: 850;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            font-size:12px;font-weight:900;color:#fff;
+            overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
         }
-
         .rq-player-username {
-            color: #888;
-            font-size: 11px;
-            margin-top: 3px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            font-size:10px;color:#888;margin-top:3px;
+            overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
         }
-
         .rq-player-rank {
-            color: #e33b4d;
-            font-size: 10px;
-            font-weight: 800;
-            margin-top: 5px;
+            color:#e43b4d;font-size:10px;font-weight:800;margin-top:4px;
         }
-
         .rq-player-stats {
-            display: flex;
-            gap: 7px;
-            margin-top: 5px;
-            color: #888;
-            font-size: 10px;
-            flex-wrap: wrap;
+            display:flex;gap:6px;flex-wrap:wrap;
+            color:#888;font-size:9px;margin-top:4px;
         }
 
         .rq-clock {
-            min-width: 67px;
-            text-align: center;
-            padding: 7px 8px;
-            border-radius: 8px;
-            background: #080808;
-            border: 1px solid #302020;
-            color: #fff;
-            font-size: 18px;
-            font-weight: 900;
-            font-variant-numeric: tabular-nums;
+            background:#080808;border:1px solid #332126;
+            border-radius:8px;padding:7px 5px;
+            min-width:56px;text-align:center;
+            color:white;font-size:16px;font-weight:900;
+            font-variant-numeric:tabular-nums;
         }
-
         .rq-clock.active {
-            background: #3a0c15;
-            border-color: #b82038;
-            color: #ff5269;
-            box-shadow: 0 0 12px #b8203825;
+            border-color:#d52b45;background:#320d16;color:#ff5269;
         }
-
-        .rq-clock.low {
-            color: #ff334e;
-            animation: rqClockPulse .8s infinite alternate;
-        }
-
-        @keyframes rqClockPulse {
-            from { opacity: 1; }
-            to { opacity: .55; }
-        }
+        .rq-clock.danger {color:#ff334e}
 
         .rq-chess-players {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            margin: 14px 0;
+            display:grid;grid-template-columns:1fr 1fr;
+            gap:7px;margin:12px 0;
         }
 
         .rq-mode-selector {
-            display: grid;
-            grid-template-columns: repeat(3,1fr);
-            gap: 7px;
-            margin: 14px 0;
+            display:grid;grid-template-columns:repeat(3,1fr);
+            gap:7px;margin:12px 0;
         }
-
         .rq-mode-btn {
-            background: #111;
-            border: 1px solid #2b2022;
-            border-radius: 10px;
-            padding: 10px 4px;
-            color: #999;
-            font-size: 11px;
-            font-weight: 800;
-            cursor: pointer;
+            border:1px solid #2b2022;border-radius:10px;
+            background:#111;color:#888;padding:10px 3px;
+            font-size:10px;font-weight:900;
         }
-
         .rq-mode-btn span {
-            display: block;
-            margin-top: 4px;
-            font-size: 14px;
-            color: #fff;
+            display:block;color:#fff;font-size:13px;margin-top:4px;
         }
-
         .rq-mode-btn.selected {
-            border-color: #e12642;
-            background: linear-gradient(145deg,#3b0d16,#160a0d);
-            color: #ff4058;
-            box-shadow: 0 0 14px #b8203820;
+            color:#ff4058;border-color:#e12642;
+            background:linear-gradient(145deg,#3b0d16,#160a0d);
         }
 
         .rq-chess-board {
-            width: 100%;
-            aspect-ratio: 1;
-            display: grid;
-            grid-template-columns: repeat(8,1fr);
-            overflow: hidden;
-            border-radius: 7px;
-            border: 2px solid #351019;
-            box-shadow: 0 10px 35px #0009;
-            touch-action: manipulation;
-            background: #100d0e;
+            width:100%;aspect-ratio:1;
+            display:grid;grid-template-columns:repeat(8,1fr);
+            overflow:hidden;border-radius:5px;
+            border:2px solid #46111c;
+            background:#100d0e;touch-action:manipulation;
+            box-shadow:0 10px 30px #0008;
         }
-
         .rq-square {
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 0;
-            aspect-ratio: 1;
-            cursor: pointer;
-            overflow: hidden;
+            position:relative;display:flex;
+            align-items:center;justify-content:center;
+            min-width:0;aspect-ratio:1;overflow:hidden;
+            cursor:pointer;
         }
-
-        .rq-square.light { background: #741329; }
-        .rq-square.dark { background: #100d0e; }
-
+        .rq-square.light {background:#741329}
+        .rq-square.dark {background:#100d0e}
         .rq-square.selected {
-            background: #b20e30 !important;
-            box-shadow: inset 0 0 0 3px #ff3153;
+            background:#ad1834!important;
+            box-shadow:inset 0 0 0 3px #ff3856;
         }
-
         .rq-square.last-move {
-            box-shadow: inset 0 0 0 3px #e6d16c75;
+            box-shadow:inset 0 0 0 3px #e6d16c75;
         }
-
         .rq-square.legal::after {
-            content: '';
-            position: absolute;
-            width: 25%;
-            height: 25%;
-            border-radius: 50%;
-            background: #e4d8c590;
-            z-index: 1;
+            content:'';position:absolute;width:24%;height:24%;
+            background:#ddd9d2a0;border-radius:50%;z-index:1;
         }
-
         .rq-square.capture::after {
-            content: '';
-            position: absolute;
-            inset: 4%;
-            border: 4px solid #e4d8c5a0;
-            border-radius: 50%;
-            z-index: 1;
+            content:'';position:absolute;inset:5%;
+            border:3px solid #ddd9d280;border-radius:50%;z-index:1;
         }
-
         .rq-piece {
-            width: 98%;
-            height: 98%;
-            object-fit: contain;
-            position: relative;
-            z-index: 2;
-            pointer-events: none;
-            filter: drop-shadow(0 3px 3px #0008);
+            width:97%;height:97%;object-fit:contain;
+            position:relative;z-index:2;pointer-events:none;
         }
 
         .rq-chess-status {
-            text-align: center;
-            color: #ddd;
-            font-size: 12px;
-            padding: 11px;
-            background: #111;
-            border: 1px solid #24191b;
-            border-radius: 10px;
-            margin: 10px 0;
+            text-align:center;color:#ddd;font-size:12px;
+            padding:11px;background:#111;
+            border:1px solid #281a1d;border-radius:9px;margin:10px 0;
         }
-
-        .rq-chess-actions {
-            display: flex;
-            gap: 8px;
-            margin-top: 12px;
-        }
-
+        .rq-chess-actions {display:flex;gap:8px;margin-top:10px}
         .rq-chess-actions button {
-            flex: 1;
-            border: 1px solid #392027;
-            border-radius: 10px;
-            background: #171010;
-            color: white;
-            padding: 12px 8px;
-            font-size: 12px;
-            font-weight: 800;
-            cursor: pointer;
+            flex:1;border:1px solid #392027;border-radius:10px;
+            background:#171010;color:white;padding:12px 6px;
+            font-size:12px;font-weight:900;cursor:pointer;
         }
-
         .rq-chess-actions button.primary {
-            background: #a7192b;
-            border-color: #d32b40;
-        }
-
-        .rq-chess-actions button:disabled {
-            opacity: .45;
-        }
-
-        .rq-leader-row {
-            display: flex;
-            align-items: center;
-            gap: 11px;
-            padding: 11px;
-            border-bottom: 1px solid #252020;
-        }
-
-        .rq-leader-row.me {
-            background: #281014;
+            background:#a7192b;border-color:#d32b40;
         }
 
         .rq-rank-progress {
-            margin-top: 12px;
-            padding: 13px;
-            background: #111;
-            border: 1px solid #292020;
-            border-radius: 12px;
+            margin-top:12px;padding:13px;background:#111;
+            border:1px solid #292020;border-radius:12px;
         }
-
         .rq-progress-track {
-            height: 7px;
-            background: #292020;
-            border-radius: 10px;
-            overflow: hidden;
-            margin-top: 9px;
+            height:7px;background:#292020;
+            border-radius:10px;overflow:hidden;margin-top:9px;
         }
-
         .rq-progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg,#8b1526,#ff4257);
-            border-radius: 10px;
+            height:100%;background:linear-gradient(90deg,#8b1526,#ff4257);
         }
 
-        .rq-game-result {
-            text-align: center;
-            padding: 24px 12px;
-            background: #170c0e;
-            border: 1px solid #70202b;
-            border-radius: 15px;
-            margin-top: 14px;
-            animation: rqResult .45s ease;
+        .rq-leader-row {
+            display:flex;align-items:center;gap:10px;
+            padding:11px;border-bottom:1px solid #252020;
+        }
+        .rq-leader-row.me {background:#281014}
+
+        .rq-result {
+            text-align:center;padding:22px 10px;
+            background:#170c0e;border:1px solid #70202b;
+            border-radius:15px;margin-top:12px;
+        }
+        .rq-result h2 {color:#ff4057;margin:0 0 8px;font-size:24px}
+        .rq-result button {
+            margin-top:14px;background:#a7192b;color:white;
+            border:0;border-radius:9px;padding:12px 20px;font-weight:900;
         }
 
-        .rq-game-result h2 {
-            color: #ff4057;
-            font-size: 24px;
-            margin: 0 0 8px;
-        }
-
-        .rq-game-result button {
-            margin-top: 16px;
-            background: #a7192b;
-            color: white;
-            border: 0;
-            border-radius: 9px;
-            padding: 12px 22px;
-            font-weight: 900;
-        }
-
-        @keyframes rqResult {
-            from { opacity: 0; transform: scale(.92); }
-            to { opacity: 1; transform: scale(1); }
-        }
-
-        @media(max-width:360px) {
-            .rq-chess-players { grid-template-columns: 1fr; }
-            .rq-player-card { padding: 8px; }
-            .rq-clock { min-width: 58px; font-size: 16px; }
+        @media(max-width:350px) {
+            .rq-chess-players {grid-template-columns:1fr}
         }
     `;
 
-    document.head.appendChild(styles);
+    document.head.appendChild(style);
 
-    // ==========================================
+    // =============================================
     // NAVIGATION
-    // ==========================================
+    // =============================================
 
     function hideSections() {
         $$('.hero,.profile,.stats,.menu,.section-heading').forEach(el => {
@@ -538,257 +351,214 @@ document.addEventListener('DOMContentLoaded', () => {
         ['gamesHub', 'chessScreen', 'ratingSection'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
-        }
+        });
+    }
+
+    function navActive(page) {
+        $$('.nav-item').forEach(el => {
+            el.classList.toggle('active', el.dataset.page === page);
+        });
     }
 
     function showHome() {
         hideSections();
-
         $$('.hero,.profile,.stats,.menu,.section-heading').forEach(el => {
             el.style.display = '';
         });
-
-        $$('.nav-item').forEach(el => {
-            el.classList.toggle('active', el.dataset.page === 'home');
-        }
+        navActive('home');
     }
 
     function showGames() {
         hideSections();
-
-        const hub = $('#gamesHub');
-        if (hub) hub.style.display = 'block';
-
-        $$('.nav-item').forEach(el => {
-            el.classList.toggle('active', el.dataset.page === 'games');
-        }
+        if ($('#gamesHub')) $('#gamesHub').style.display = 'block';
+        navActive('games');
     }
 
     function showChess() {
         hideSections();
-
-        const screen = $('#chessScreen');
-        if (screen) screen.style.display = 'block';
-
-        $$('.nav-item').forEach(el => {
-            el.classList.toggle('active', el.dataset.page === 'games');
-        });
-
-        initChessScreen();
+        if ($('#chessScreen')) $('#chessScreen').style.display = 'block';
+        navActive('games');
+        initChess();
     }
 
     function showRating() {
         hideSections();
-
-        const section = $('#ratingSection');
-        if (section) section.style.display = 'block';
-
-        $$('.nav-item').forEach(el => {
-            el.classList.toggle('active', el.dataset.page === 'rating');
-        });
-
+        if ($('#ratingSection')) $('#ratingSection').style.display = 'block';
+        navActive('rating');
         loadLeaderboard();
     }
 
-    $$('.nav-item').forEach(item => {
-        item.addEventListener('click', () => {
-            const page = item.dataset.page;
-            if (page === 'home') showHome();
-            if (page === 'games') showGames();
-            if (page === 'rating') showRating();
+    $$('.nav-item').forEach(el => {
+        el.addEventListener('click', () => {
+            switch (el.dataset.page) {
+                case 'home': showHome(); break;
+                case 'games': showGames(); break;
+                case 'rating': showRating(); break;
+            }
         });
     });
 
     $('#openChess')?.addEventListener('click', showChess);
     $('#backToGames')?.addEventListener('click', showGames);
 
-    // ==========================================
-    // REGISTER
-    // ==========================================
+    // =============================================
+    // PLAYER REGISTER / PROFILE
+    // =============================================
 
-    async function registerPlayer() {
-        if (!currentUser) return null;
+    async function register() {
+        if (!user || !tg?.initData) return null;
 
         try {
-            const result = await api('/api/register', {
+            const data = await request('/api/register', {
                 method: 'POST',
-                body: JSON.stringify({
-                    initData: tg?.initData || '',
-                    user: {
-                        id: currentUser.id,
-                        first_name: currentUser.first_name || '',
-                        last_name: currentUser.last_name || '',
-                        username: currentUser.username || '',
-                        photo_url: currentUser.photo_url || ''
-                    }
-                })
+                body: JSON.stringify({ initData: tg.initData })
             });
-
-            return result.player || result;
-        } catch (error) {
-            console.error('Registration error:', error);
+            return data.player || data;
+        } catch (e) {
+            console.error('Register:', e);
             return null;
         }
     }
 
-    async function loadMyProfile() {
-        if (!playerId) return null;
+    async function loadProfile() {
+        if (!uid) return null;
 
         try {
-            const result = await api('/api/player/' + encodeURIComponent(playerId));
-            currentPlayer = result.player || result;
-            renderMyProfile(currentPlayer);
-            return currentPlayer;
-        } catch (error) {
-            console.error('Profile error:', error);
+            const data = await request('/api/player/' + encodeURIComponent(uid));
+            myProfile = data.player || data;
+            renderProfile(myProfile);
+            return myProfile;
+        } catch (e) {
+            console.error('Profile:', e);
             return null;
         }
     }
 
-    // ==========================================
-    // PROFILE
-    // ==========================================
+    function renderProfile(p) {
+        if (!p) return;
 
-    function renderMyProfile(profile) {
-        if (!profile) return;
+        if ($('#username')) $('#username').textContent = displayName(p);
 
-        const nameElement = $('#username');
-        if (nameElement) nameElement.textContent = getDisplayName(profile);
+        const avatarNode = $('[data-user-avatar]');
+        if (avatarNode) avatarNode.innerHTML = avatar(p);
 
-        const avatarElement = $('[data-user-avatar]');
-        if (avatarElement) avatarElement.innerHTML = avatarHTML(profile);
-
-        renderRankProgress(profile);
+        renderRank(p);
     }
 
-    function renderRankProgress(profile) {
+    function renderRank(p) {
         const mount = $('#chessMount');
-        if (!mount || !profile) return;
+        if (!mount || !p) return;
 
-        const progress = Math.max(0, Math.min(100, Number(profile.progress || 0)));
-        const remaining = Number(profile.elo_remaining || 0);
+        let node = $('#rqRankProgress', mount);
 
-        let element = $('#rqRankProgress', mount);
-
-        if (!element) {
-            element = document.createElement('div');
-            element.id = 'rqRankProgress';
-            element.className = 'rq-rank-progress';
-            mount.appendChild(element);
+        if (!node) {
+            node = document.createElement('div');
+            node.id = 'rqRankProgress';
+            node.className = 'rq-rank-progress';
+            mount.appendChild(node);
         }
 
-        element.innerHTML = `
-            <div style="display:flex;justify-content:space-between;gap:8px">
-                <strong style="color:#fff">${escapeHTML(getRank(profile))}</strong>
-                <span style="color:#aaa">${getElo(profile)} ELO</span>
+        const progress = Math.max(0, Math.min(100, Number(p.progress || 0)));
+        const remaining = Number(p.elo_remaining || 0);
+
+        node.innerHTML = `
+            <div style="display:flex;justify-content:space-between">
+                <b>${esc(rank(p))}</b>
+                <span>${elo(p)} ELO</span>
             </div>
             <div class="rq-progress-track">
                 <div class="rq-progress-fill" style="width:${progress}%"></div>
             </div>
             <div style="font-size:11px;color:#888;margin-top:7px">
-                ${remaining > 0 ? `До следующего ранга: ${remaining} ELO` : 'Прогресс ранга'}
+                ${remaining > 0 ? `До следующего ранга: ${remaining} ELO` : 'Рейтинг'}
             </div>
         `;
     }
 
-    // ==========================================
+    // =============================================
     // LEADERBOARD
-    // ==========================================
+    // =============================================
 
-    async function loadLeaderboard(mode = selectedMode) {
+    async function loadLeaderboard() {
         const list = $('#ratingList');
         if (!list) return;
 
-        list.innerHTML = '<div style="padding:20px;color:#888">Загрузка рейтинга...</div>';
+        list.innerHTML = '<div style="padding:18px;color:#888">Загрузка рейтинга...</div>';
 
         try {
-            const result = await api('/api/leaderboard?mode=' + encodeURIComponent(mode));
-            const players = Array.isArray(result)
-                ? result
-                : result.players || result.leaderboard || [];
+            const data = await request('/api/leaderboard?mode=' + encodeURIComponent(mode));
+            const players = data.leaderboard || data.players || (Array.isArray(data) ? data : []);
 
             if (!players.length) {
-                list.innerHTML = '<div style="padding:20px;color:#888">Пока нет игроков</div>';
+                list.innerHTML = '<div style="padding:18px;color:#888">Пока нет игроков</div>';
                 return;
             }
 
-            list.innerHTML = players.map((player, index) => {
-                const isMe = String(player.id) === playerId;
-
-                return `
-                    <div class="rq-leader-row ${isMe ? 'me' : ''}">
-                        <div style="width:25px;color:#999;font-size:13px;font-weight:900">${index + 1}</div>
-                        ${avatarHTML(player, 'small')}
-                        <div class="rq-player-info">
-                            <div class="rq-player-name">${escapeHTML(getDisplayName(player))}</div>
-                            <div class="rq-player-username">${escapeHTML(getUsername(player))}</div>
-                            <div class="rq-player-rank">${escapeHTML(getRank(player))}</div>
-                        </div>
-                        <div style="text-align:right">
-                            <div class="rq-player-elo">${getElo(player)}</div>
-                            <div style="font-size:10px;color:#888">ELO</div>
-                        </div>
+            list.innerHTML = players.map((p, i) => `
+                <div class="rq-leader-row ${String(p.id) === uid ? 'me' : ''}">
+                    <b style="width:22px;color:#999">${i + 1}</b>
+                    ${avatar(p, 'small')}
+                    <div class="rq-player-info">
+                        <div class="rq-player-name">${esc(displayName(p))}</div>
+                        <div class="rq-player-username">${esc(username(p))}</div>
+                        <div class="rq-player-rank">${esc(rank(p))}</div>
                     </div>
-                `;
-            }).join('');
-        } catch (error) {
-            console.error('Leaderboard error:', error);
-            list.innerHTML = '<div style="padding:20px;color:#888">Не удалось загрузить рейтинг</div>';
+                    <div style="text-align:right">
+                        <b>${elo(p)}</b>
+                        <div style="font-size:9px;color:#888">ELO</div>
+                    </div>
+                </div>
+            `).join('');
+        } catch (e) {
+            console.error('Leaderboard:', e);
+            list.innerHTML = '<div style="padding:18px;color:#888">Ошибка загрузки рейтинга</div>';
         }
     }
 
-    // ==========================================
-    // CHESS SCREEN
-    // ==========================================
+    // =============================================
+    // CHESS UI
+    // =============================================
 
-    function initChessScreen() {
+    function initChess() {
         const mount = $('#chessMount');
-        if (!mount || mount.dataset.initialized === 'true') return;
-
-        mount.dataset.initialized = 'true';
+        if (!mount || mount.dataset.ready === '1') return;
+        mount.dataset.ready = '1';
 
         mount.innerHTML = `
-            <div class="rq-chess-title">
-                <div style="font-size:23px;font-weight:950;color:#fff;letter-spacing:1px">REQUIEM CHESS</div>
-                <div style="font-size:10px;color:#888;margin-top:4px;letter-spacing:2px">ONLINE RANKED MATCH</div>
-            </div>
+            <div style="padding:5px 0">
+                <div style="font-size:23px;font-weight:950;color:#fff">REQUIEM CHESS</div>
+                <div style="font-size:10px;color:#888;letter-spacing:2px;margin-top:3px">ONLINE RANKED</div>
 
-            <div class="rq-mode-selector">
-                ${Object.entries(MODES).map(([key, mode]) => `
-                    <button class="rq-mode-btn ${key === selectedMode ? 'selected' : ''}"
-                            data-mode="${key}">
-                        ${mode.name}
-                        <span>${mode.label}</span>
-                    </button>
-                `).join('')}
+                <div class="rq-mode-selector">
+                    ${Object.entries(MODES).map(([key, m]) => `
+                        <button class="rq-mode-btn ${key === mode ? 'selected' : ''}" data-mode="${key}">
+                            ${m.name}<span>${m.label}</span>
+                        </button>
+                    `).join('')}
             </div>
 
             <div class="rq-chess-players">
                 <div id="rqWhitePlayer" class="rq-player-card">
-                    <div class="rq-avatar large"><span>W</span></div>
+                    ${avatar(null, 'large')}
                     <div class="rq-player-info">
                         <div class="rq-player-name">Ожидание игрока</div>
                         <div class="rq-player-username">Белые</div>
                         <div class="rq-player-rank">—</div>
                     </div>
-                    <div id="rqWhiteClock" class="rq-clock">${formatTime(MODES[selectedMode].time)}</div>
+                    <div id="rqWhiteClock" class="rq-clock">${fmtTime(MODES[mode].seconds)}</div>
                 </div>
-
                 <div id="rqBlackPlayer" class="rq-player-card">
-                    <div class="rq-avatar large"><span>B</span></div>
+                    ${avatar(null, 'large')}
                     <div class="rq-player-info">
                         <div class="rq-player-name">Ожидание игрока</div>
                         <div class="rq-player-username">Чёрные</div>
                         <div class="rq-player-rank">—</div>
                     </div>
-            <div id="rqBlackClock" class="rq-clock">${formatTime(MODES[selectedMode].time)}</div>
+                    <div id="rqBlackClock" class="rq-clock">${fmtTime(MODES[mode].seconds)}</div>
                 </div>
             </div>
 
-            <div id="rqChessStatus" class="rq-chess-status">
-                Выбери режим и создай комнату
-            </div>
-
+            <div id="rqChessStatus" class="rq-chess-status">Выбери режим и создай комнату</div>
             <div id="rqChessBoard" class="rq-chess-board"></div>
 
             <div class="rq-chess-actions">
@@ -797,10 +567,11 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
 
             <div id="rqRoomControls" style="display:none;margin-top:12px">
-                <div style="display:flex;gap:8px">
+                <div style="display:flex;gap:7px">
                     <input id="rqRoomCode" placeholder="Код комнаты"
                         style="flex:1;min-width:0;background:#111;border:1px solid #392027;color:white;padding:12px;border-radius:9px">
-                    <button id="rqCopyCode" style="background:#211215;color:white;border:1px solid #70202b;border-radius:9px;padding:10px">Копировать</button>
+                    <button id="rqCopyCode"
+                        style="background:#211215;color:white;border:1px solid #70202b;border-radius:9px;padding:10px">Копировать</button>
                 </div>
                 <button id="rqLeaveRoom"
                     style="width:100%;margin-top:8px;background:#211215;color:#fff;border:1px solid #392027;padding:12px;border-radius:9px">
@@ -809,148 +580,137 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
 
             <div id="rqResult"></div>
+        </div>
         `;
 
         $$('.rq-mode-btn', mount).forEach(button => {
             button.addEventListener('click', () => {
-                if (roomId) {
-                    showToast('Сначала покинь текущую комнату');
-                    return;
-                }
+                if (room) return toast('Сначала покинь комнату');
 
-                selectedMode = button.dataset.mode;
+                mode = button.dataset.mode;
+                $$('.rq-mode-btn', mount).forEach(b => b.classList.toggle('selected', b.dataset.mode === mode));
 
-                $$('.rq-mode-btn', mount).forEach(btn => {
-                    btn.classList.toggle('selected', btn.dataset.mode === selectedMode);
-                });
-
-                clocks.white = MODES[selectedMode].time;
-                clocks.black = MODES[selectedMode].time;
-                updateClocks();
-
-                showToast(`${MODES[selectedMode].name}: ${MODES[selectedMode].label}`);
+                clocks.white = MODES[mode].seconds;
+                clocks.black = MODES[mode].seconds;
+                renderClocks();
             });
         });
 
-        $('#rqCreateRoom', mount)?.addEventListener('click', createRoom);
-        $('#rqJoinRoom', mount)?.addEventListener('click', joinRoom);
-        $('#rqCopyCode', mount)?.addEventListener('click', copyRoomCode);
-        $('#rqLeaveRoom', mount)?.addEventListener('click', leaveRoom);
+        $('#rqCreateRoom').addEventListener('click', createRoom);
+        $('#rqJoinRoom').addEventListener('click', joinRoom);
+        $('#rqCopyCode').addEventListener('click', copyCode);
+        $('#rqLeaveRoom').addEventListener('click', leaveRoom);
 
         renderBoard();
-        loadChessLibrary();
+        loadChess();
     }
 
-    // ==========================================
-    // CHESS ENGINE
-    // ==========================================
+    // =============================================
+    // LOAD CHESS ENGINE
+    // =============================================
 
-    function loadChessLibrary() {
+    function loadChess() {
         if (window.Chess) {
-            chessLoaded = true;
             chess = new window.Chess();
+            chessReady = true;
             renderBoard();
             return;
         }
 
+        if ($('script[data-requiem-chess]')) return;
+
         const script = document.createElement('script');
+        script.dataset.requiemChess = '1';
         script.src = 'https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js';
 
         script.onload = () => {
-            chessLoaded = true;
+            if (!window.Chess) return toast('Chess.js загрузился некорректно');
             chess = new window.Chess();
+            chessReady = true;
             renderBoard();
         };
 
-        script.onerror = () => showToast('Не удалось загрузить шахматный движок');
+        script.onerror = () => toast('Не загрузился шахматный движок');
 
         document.head.appendChild(script);
     }
 
-    // ==========================================
-    // SVG CHESS PIECES
-    // ==========================================
+    // =============================================
+    // INLINE SVG PIECES
+    // =========================================================
 
-    function getPieceImage(type, color) {
-        const white = color === 'white';
+    function pieceSVG(type, side) {
+        const white = side === 'white';
+        const c = white
+            ? { a: '#ff3154', b: '#ff8b9e', d: '#710c23', outline: '#ffd0d8' }
+            : { a: '#292b32', b: '#7c8492', d: '#08090b', outline: '#d8dce4' };
 
-        const palette = white
-            ? { base: '#ff2448', mid: '#ff7890', dark: '#7c0c25', edge: '#ffd0da' }
-            : { base: '#17191d', mid: '#737985', dark: '#030405', edge: '#d3d7df' };
+        const p = type.toLowerCase();
 
-        const p = palette;
-
-        const shapes = {
+        const parts = {
             p: `
-                <path d="M50 18 C37 18 29 28 31 39 C32 45 37 49 42 51
-                L38 63 L30 70 L27 82 L73 82 L70 70 L62 63 L58 51
-                C64 48 69 44 69 38 C69 27 61 18 50 18Z"/>
-                <path d="M38 63 L62 63 L69 70 L31 70Z" fill="${p.mid}"/>
-                <path d="M27 82 L73 82 L78 90 L22 90Z"/>
+                <circle cx="50" cy="28" r="13"/>
+                <path d="M37 43 L63 43 L60 55 L69 68 L31 68 L40 55Z"/>
+                <path d="M29 70 L71 70 L76 83 L24 83Z"/>
+                <path d="M20 85 L80 85 L84 93 L16 93Z"/>
             `,
             r: `
-                <path d="M24 18 L36 18 L36 28 L44 28 L44 18 L56 18 L56 28
-                L64 28 L64 18 L76 18 L76 38 L69 43 L68 69 L32 69 L31 43
-                L24 38Z"/>
-                <path d="M31 43 L69 43 L66 69 L34 69Z" fill="${p.mid}"/>
-                <path d="M27 69 L73 69 L78 84 L22 84Z"/>
-                <path d="M22 84 L78 84 L82 91 L18 91Z"/>
+                <path d="M23 18 H36 V29 H44 V18 H56 V29 H64 V18 H77 V40
+                L69 46 L66 70 H34 L31 46 L23 40Z"/>
+                <path d="M31 46 H69 L66 70 H34Z" fill="${c.b}"/>
+                <path d="M26 72 H74 L79 85 H21Z"/>
+                <path d="M18 86 H82 L85 93 H15Z"/>
             `,
             n: `
-                <path d="M25 81 L26 68 L34 57 L32 43 L40 28 L53 17
-                L70 24 L78 40 L71 49 L59 47 L54 55 L66 67 L72 81Z"/>
-                <path d="M39 31 L51 24 L63 29 L70 41 L59 41 L53 50
-                L43 49 L39 39Z" fill="${p.mid}"/>
-                <path d="M27 68 L64 68 L72 81 L25 81Z"/>
-                <path d="M22 81 L78 81 L82 91 L18 91Z"/>
-                <circle cx="61" cy="33" r="3.5" fill="${p.edge}"/>
+                <path d="M28 82 L29 67 L39 54 L35 42 L42 28 L54 17
+                L70 25 L78 41 L70 50 L59 48 L53 57 L66 67 L73 82Z"/>
+                <path d="M42 31 L54 24 L64 30 L71 40 L60 42 L52 50
+                L42 47 L39 40Z" fill="${c.b}"/>
+                <circle cx="62" cy="34" r="3" fill="${c.outline}"/>
+                <path d="M28 69 H67 L73 82 H26Z"/>
+                <path d="M19 85 H81 L84 93 H16Z"/>
             `,
             b: `
-                <path d="M50 13 L58 26 L54 32 C65 38 68 48 63 58
-                L58 65 L67 73 L74 82 L26 82 L33 73 L42 65 L37 58
-                C32 48 35 38 46 32 L42 26Z"/>
-                <path d="M46 32 L54 32 C63 39 64 47 59 56 L50 62
-                L41 56 C36 47 38 39 46 32Z" fill="${p.mid}"/>
-                <path d="M28 82 L72 82 L78 91 L22 91Z"/>
+                <path d="M50 14 L58 28 L54 34 C67 39 69 51 62 61
+                L57 67 L68 75 L74 84 H26 L32 75 L43 67 L38 61
+                C31 51 33 39 46 34 L42 28Z"/>
+                <path d="M46 35 H54 C62 41 63 50 58 57 L50 63 L42 57
+                C37 50 39 41 46 35Z" fill="${c.b}"/>
+                <path d="M25 85 H75 L81 93 H19Z"/>
             `,
             q: `
-                <path d="M22 25 L34 39 L40 25 L50 39 L60 25 L66 39
-                L78 25 L72 54 L67 67 L33 67 L28 54Z"/>
-                <circle cx="22" cy="22" r="6"/>
-                <circle cx="40" cy="22" r="6"/>
-                <circle cx="50" cy="15" r="6"/>
-                <circle cx="60" cy="22" r="6"/>
-                <circle cx="78" cy="22" r="6"/>
-                <path d="M33 67 L67 67 L72 79 L28 79Z" fill="${p.mid}"/>
-                <path d="M24 79 L76 79 L80 91 L20 91Z"/>
+                <path d="M22 28 L35 40 L40 25 L50 39 L60 25 L65 40
+                L78 28 L72 55 L67 69 H33 L28 55Z"/>
+                <circle cx="22" cy="23" r="6"/>
+                <circle cx="40" cy="20" r="6"/>
+                <circle cx="50" cy="13" r="6"/>
+                <circle cx="60" cy="20" r="6"/>
+                <circle cx="78" cy="23" r="6"/>
+                <path d="M31 69 H69 L75 82 H25Z"/>
+                <path d="M19 85 H81 L85 93 H15Z"/>
             `,
             k: `
-                <path d="M44 12 L56 12 L56 27 L68 27 L68 38 L58 38
-                L63 52 L67 68 L33 68 L37 52 L42 38 L32 38 L32 27
-                L44 27Z"/>
-                <path d="M42 38 L58 38 L62 52 L38 52Z" fill="${p.mid}"/>
-                <path d="M30 68 L70 68 L75 82 L25 82Z"/>
-                <path d="M22 82 L78 82 L82 91 L18 91Z"/>
+                <path d="M44 12 H56 V27 H69 V39 H59 L64 53 L69 69
+                H31 L36 53 L41 39 H31 V27 H44Z"/>
+                <path d="M42 39 H58 L62 53 H38Z" fill="${c.b}"/>
+                <path d="M27 72 H73 L78 85 H22Z"/>
+                <path d="M17 86 H83 L86 93 H14Z"/>
             `
         };
 
-        const typeKey = String(type).toLowerCase();
-        const shape = shapes[typeKey] || shapes.p;
+        const shape = parts[p] || parts.p;
 
         const svg = `
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
                 <defs>
-                    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0%" stop-color="${p.mid}"/>
-                        <stop offset="45%" stop-color="${p.base}"/>
-                        <stop offset="100%" stop-color="${p.dark}"/>
+                    <linearGradient id="rqMetal" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stop-color="${c.b}"/>
+                        <stop offset="48%" stop-color="${c.a}"/>
+                        <stop offset="100%" stop-color="${c.d}"/>
                     </linearGradient>
-                    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
-                        <feDropShadow dx="0" dy="3" stdDeviation="2.5" flood-color="#000" flood-opacity=".65"/>
-                    </filter>
                 </defs>
-                <g fill="url(#metal)" stroke="${p.edge}" stroke-width="1.8"
-                   stroke-linejoin="round" stroke-linecap="round" filter="url(#shadow)">
+                <g fill="url(#rqMetal)" stroke="${c.outline}" stroke-width="2"
+                   stroke-linejoin="round" stroke-linecap="round">
                     ${shape}
                 </g>
             </svg>
@@ -959,173 +719,170 @@ document.addEventListener('DOMContentLoaded', () => {
         return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
     }
 
-    // ==========================================
+    // =============================================
     // PLAYER CARDS
-    // ==========================================
+    // =============================================
 
-    function renderPlayerCard(profile, color) {
-        const element = $('#rq' + (color === 'white' ? 'White' : 'Black') + 'Player');
-        if (!element) return;
+    function playerCard(profile, side) {
+        const el = $(`#rq${side === 'white' ? 'White' : 'Black'}Player`);
+        if (!el) return;
+
+        const clockId = side === 'white' ? 'rqWhiteClock' : 'rqBlackClock';
 
         if (!profile) {
-            element.innerHTML = `
-                <div class="rq-avatar large"><span>${color === 'white' ? 'W' : 'B'}</span></div>
+            el.innerHTML = `
+                ${avatar(null, 'large')}
                 <div class="rq-player-info">
                     <div class="rq-player-name">Ожидание игрока</div>
-                    <div class="rq-player-username">${color === 'white' ? 'Белые' : 'Чёрные'}</div>
+                    <div class="rq-player-username">${side === 'white' ? 'Белые' : 'Чёрные'}</div>
                     <div class="rq-player-rank">—</div>
                 </div>
-                <div class="rq-clock" id="${color === 'white' ? 'rqWhiteClock' : 'rqBlackClock'}">${formatTime(MODES[selectedMode].time)}</div>
+                <div class="rq-clock" id="${clockId}">${fmtTime(clocks[side])}</div>
             `;
             return;
         }
 
-        const wins = Number(profile.wins || 0);
-        const losses = Number(profile.losses || 0);
-        const draws = Number(profile.draws || 0);
-
-        element.innerHTML = `
-            ${avatarHTML(profile, 'large')}
+        el.innerHTML = `
+            ${avatar(profile, 'large')}
             <div class="rq-player-info">
-                <div class="rq-player-name">${escapeHTML(getDisplayName(profile))}</div>
-                <div class="rq-player-username">${escapeHTML(getUsername(profile))}</div>
-                <div class="rq-player-rank">${escapeHTML(getRank(profile))} · ${getElo(profile)} ELO</div>
+                <div class="rq-player-name">${esc(displayName(profile))}</div>
+                <div class="rq-player-username">${esc(username(profile))}</div>
+                <div class="rq-player-rank">${esc(rank(profile))} · ${elo(profile)} ELO</div>
                 <div class="rq-player-stats">
-                    <span>П ${wins}</span>
-                    <span>Пор ${losses}</span>
-                    <span>Н ${draws}</span>
+                    <span>П ${profile.wins || 0}</span>
+                    <span>Пор ${profile.losses || 0}</span>
+                    <span>Н ${profile.draws || 0}</span>
                 </div>
             </div>
-            <div class="rq-clock" id="${color === 'white' ? 'rqWhiteClock' : 'rqBlackClock'}">${formatTime(clocks[color])}</div>
+            <div class="rq-clock" id="${clockId}">${fmtTime(clocks[side])}</div>
         `;
 
-        element.classList.toggle('active-turn', state.gameStarted && chess?.turn() === (color === 'white' ? 'w' : 'b'));
+        el.classList.toggle('turn-active', game.started && chess?.turn() === (side === 'white' ? 'w' : 'b'));
     }
 
-    function updatePlayers(profiles = {}) {
-        currentProfiles = profiles || {};
+    function updateProfiles(data = {}) {
+        profiles = data || {};
+        playerCard(profiles.white, 'white');
+        playerCard(profiles.black, 'black');
 
-        renderPlayerCard(currentProfiles.white || null, 'white');
-        renderPlayerCard(currentProfiles.black || null, 'black');
-
-        currentPlayer = playerColor ? currentProfiles[playerColor] : null;
-        opponentPlayer = playerColor
-            ? currentProfiles[playerColor === 'white' ? 'black' : 'white']
-            : null;
-
-        if (currentPlayer) renderMyProfile(currentPlayer);
+        if (color) myProfile = profiles[color] || null;
+        if (myProfile) renderProfile(myProfile);
     }
 
-    // ==========================================
-    // ROOM CREATION
-    // ==========================================
+    // =============================================
+    // CREATE ROOM
+    // =============================================
 
     async function createRoom() {
-        if (!playerId) {
-            showToast('Открой игру через Telegram');
+        if (!uid || !tg?.initData) {
+            toast('Открой Mini App через Telegram');
             return;
         }
 
-        if (roomId) {
-            showToast('Сначала покинь текущую комнату');
-            return;
-        }
+        if (room) return toast('Ты уже находишься в комнате');
+
+        const button = $('#rqCreateRoom');
+        if (button) button.disabled = true;
 
         try {
-            await registerPlayer();
+            await register();
 
-            const result = await api('/api/chess/create', {
+            const data = await request('/api/chess/create', {
                 method: 'POST',
                 body: JSON.stringify({
-                    initData: tg?.initData || '',
-                    player_id: playerId,
-                    mode: selectedMode
+                    initData: tg.initData,
+                    mode
                 })
             });
 
-            if (!result.success) throw new Error(result.error || 'Не удалось создать комнату');
+            if (!data.success) throw new Error(data.error || 'Создание комнаты не удалось');
 
-            roomId = result.room_id || result.room || result.code;
-            playerColor = normalizeColor(result.color) || 'white';
+            room = data.room_id || data.room || data.code;
+            color = normalizeColor(data.color) || 'white';
 
-            if (!roomId) throw new Error('Сервер не вернул код комнаты');
+            if (!room) throw new Error('Сервер не вернул ID комнаты');
 
-            clocks.white = result.initial_time || MODES[selectedMode].time;
-            clocks.black = result.initial_time || MODES[selectedMode].time;
+            clocks.white = Number(data.initial_time || MODES[mode].seconds);
+            clocks.black = Number(data.initial_time || MODES[mode].seconds);
 
-            state.gameOver = false;
-            state.gameStarted = false;
-            state.boardLocked = true;
+            game.started = false;
+            game.over = false;
+            game.locked = true;
 
-            connectSocket(roomId);
+            const input = $('#rqRoomCode');
+            if (input) input.value = room;
 
-            $('#rqRoomCode').value = roomId;
-            $('#rqRoomControls').style.display = 'block';
+            const controls = $('#rqRoomControls');
+            if (controls) controls.style.display = 'block';
 
-            setStatus(`Комната создана · ${MODES[selectedMode].name}. Ожидаем второго игрока...`);
-            updateClocks();
-
-        } catch (error) {
-            console.error('Create room error:', error);
-            showToast(error.message || 'Ошибка создания комнаты');
+            connect(room);
+            status(`${modeName()} · Комната создана. Ожидаем соперника...`);
+            renderClocks();
+        } catch (e) {
+            console.error('Create room failed:', e);
+            toast(e.message || 'Ошибка создания комнаты');
+        } finally {
+            if (button) button.disabled = false;
         }
     }
 
-    // ==========================================
+    // =============================================
     // JOIN ROOM
-    // ==========================================
+    // =============================================
 
     async function joinRoom() {
+        if (!uid || !tg?.initData) {
+            toast('Открой Mini App через Telegram');
+            return;
+        }
+
+        if (room) return toast('Сначала покинь текущую комнату');
+
         const code = prompt('Введите код комнаты');
-        if (!code) return;
+        if (!code?.trim()) return;
 
-        if (!playerId) {
-            showToast('Открой игру через Telegram');
-            return;
-        }
-
-        if (roomId) {
-            showToast('Сначала покинь текущую комнату');
-            return;
-        }
+        const button = $('#rqJoinRoom');
+        if (button) button.disabled = true;
 
         try {
-            await registerPlayer();
+            await register();
 
-            roomId = code.trim();
-            selectedMode = 'blitz';
+            room = code.trim();
 
-            connectSocket(roomId);
+            const input = $('#rqRoomCode');
+            if (input) input.value = room;
 
-            $('#rqRoomCode').value = roomId;
-            $('#rqRoomControls').style.display = 'block';
-            setStatus('Подключение к комнате...');
-        } catch (error) {
-            showToast(error.message || 'Ошибка подключения');
+            const controls = $('#rqRoomControls');
+            if (controls) controls.style.display = 'block';
+
+            connect(room);
+            status('Подключение к комнате...');
+        } catch (e) {
+            console.error('Join room:', e);
+            toast(e.message || 'Не удалось войти');
+            room = null;
+        } finally {
+            if (button) button.disabled = false;
         }
     }
 
-    // ==========================================
+    // =============================================
     // WEBSOCKET
-    // ==========================================
+    // =============================================
 
-    function connectSocket(code) {
-        if (socket) {
-            socket.onclose = null;
-            socket.close();
-        }
+    function connect(roomId) {
+        disconnectSocket();
 
         const initData = encodeURIComponent(tg?.initData || '');
-        const url = `wss://requiem-bot-7eyu.onrender.com/ws/chess/${encodeURIComponent(code)}?initData=${initData}`;
+        const url = `wss://requiem-bot-7eyu.onrender.com/ws/chess/${encodeURIComponent(roomId)}?initData=${initData}`;
 
         socket = new WebSocket(url);
-        state.connected = false;
 
-        setStatus('Подключение к серверу...');
+        status('Подключение к серверу...');
 
         socket.onopen = () => {
-            state.connected = true;
-            showToast('Подключено к комнате');
+            game.connected = true;
+            toast('Соединение установлено');
         };
 
         socket.onmessage = event => {
@@ -1133,42 +890,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
             try {
                 data = JSON.parse(event.data);
-            } catch {
-                console.error('Invalid WebSocket message', event.data);
+            } catch (e) {
+                console.error('WS parse error:', e);
                 return;
             }
 
-            handleChessMessage(data);
+            receive(data);
         };
 
         socket.onerror = error => {
-            console.error('WebSocket error', error);
-            setStatus('Ошибка соединения');
+            console.error('WS error:', error);
+            status('Ошибка WebSocket');
         };
 
         socket.onclose = () => {
-            state.connected = false;
-
-            if (!state.gameOver) setStatus('Соединение закрыто');
+            game.connected = false;
+            if (!game.over) status('Соединение закрыто');
         };
     }
 
-    // ==========================================
-    // SERVER MESSAGE HANDLER
-    // ==========================================
+    function disconnectSocket() {
+        if (!socket) return;
+        socket.onclose = null;
+        try { socket.close(); } catch {}
+        socket = null;
+    }
 
-    function handleChessMessage(data) {
+    // =============================================
+    // RECEIVE SERVER STATE
+    // =============================================
+
+    function receive(data) {
         if (data.error) {
-            showToast(data.error);
+            toast(data.error);
             return;
         }
 
-        if (data.color) playerColor = normalizeColor(data.color) || playerColor;
-        if (data.room_id) roomId = data.room_id;
+        if (data.room_id) room = data.room_id;
+        if (data.color) color = normalizeColor(data.color) || color;
 
         if (data.mode && MODES[data.mode]) {
-            selectedMode = data.mode;
-            updateModeButtons();
+            mode = data.mode;
+            updateModeUI();
         }
 
         if (data.initial_time) {
@@ -1176,365 +939,314 @@ document.addEventListener('DOMContentLoaded', () => {
             clocks.black = Number(data.initial_time);
         }
 
-        if (data.profiles) updatePlayers(data.profiles);
+        if (data.profiles) updateProfiles(data.profiles);
 
-        if (Array.isArray(data.players)) {
-            state.gameStarted = data.players.length >= 2;
-        }
-
-        if (data.started !== undefined) state.gameStarted = !!data.started;
+        if (data.started !== undefined) game.started = !!data.started;
+        else if (data.players) game.started = data.players.length >= 2;
 
         if (data.clocks) {
-            if (data.clocks.white !== undefined) clocks.white = Number(data.clocks.white);
-            if (data.clocks.black !== undefined) clocks.black = Number(data.clocks.black);
-            lastClockTick = Date.now();
-            updateClocks();
+            if (data.clocks.white != null) clocks.white = Number(data.clocks.white);
+            if (data.clocks.black != null) clocks.black = Number(data.clocks.black);
         }
 
-        if (data.fen) {
-            state.lastFen = data.fen;
-
-            if (chessLoaded && chess) {
-                try {
-                    chess.load(data.fen);
-                    selectedSquare = null;
-                    legalMoves = [];
-                    renderBoard();
-                } catch (error) {
-                    console.error('FEN error:', error);
-                }
+        if (data.fen && chessReady && chess) {
+            try {
+                chess.load(data.fen);
+                selected = null;
+                moves = [];
+                renderBoard();
+            } catch (e) {
+                console.error('FEN load error:', e);
             }
         }
 
         if (data.turn !== undefined) {
             const turn = normalizeTurn(data.turn);
-            const myTurn = turn === (playerColor === 'white' ? 'w' : 'b');
+            const myTurn = turn === (color === 'white' ? 'w' : 'b');
 
-            state.boardLocked = !myTurn || !state.gameStarted || state.gameOver;
+            game.locked = !game.started || !myTurn || game.over;
 
-            if (!state.gameOver) {
-                setStatus(!state.gameStarted
-                    ? 'Ожидаем второго игрока...'
-                    : myTurn
-                        ? 'Ваш ход'
-                        : `Ход соперника (${turn === 'w' ? 'Белые' : 'Чёрные'})`);
+            if (!game.over) {
+                if (!game.started) status('Ожидаем второго игрока...');
+                else status(myTurn ? 'Ваш ход' : 'Ход соперника');
             }
-
-            renderBoard();
-            updatePlayers(currentProfiles);
         }
 
-        if (data.game_over) {
-            state.gameOver = true;
-            state.boardLocked = true;
+        renderClocks();
+
+        if (data.game_over && !game.over) {
+            game.over = true;
+            game.locked = true;
             stopClock();
-            showGameResult(data.result);
-        }
-
-        if (data.success && data.room_id) {
-            $('#rqRoomCode').value = data.room_id;
-        }
-
-        if (data.opponent_name && !data.profiles) {
-            const opponentColor = playerColor === 'white' ? 'black' : 'white';
-            const profile = currentProfiles[opponentColor] || {};
-            profile.first_name = data.opponent_name;
-            renderPlayerCard(profile, opponentColor);
+            result(data.result);
         }
     }
 
-    function updateModeButtons() {
-        $$('.rq-mode-btn').forEach(button => {
-            button.classList.toggle('selected', button.dataset.mode === selectedMode);
-        });
+    function updateModeUI() {
+        $$('.rq-mode-btn').forEach(b => b.classList.toggle('selected', b.dataset.mode === mode));
     }
 
-    // ==========================================
+    // =============================================
     // STATUS
-    // ==========================================
+    // =============================================
 
-    function setStatus(message) {
-        const element = $('#rqChessStatus');
-        if (element) element.textContent = message;
+    function status(message) {
+        const el = $('#rqChessStatus');
+        if (el) el.textContent = message;
     }
 
-    // ==========================================
+    // =============================================
     // CLOCKS
-    // ==========================================
+    // =============================================
 
-    function updateClocks() {
+    function renderClocks() {
         const white = $('#rqWhiteClock');
         const black = $('#rqBlackClock');
 
         if (white) {
-            white.textContent = formatTime(clocks.white);
-            white.classList.toggle('active', state.gameStarted && chess?.turn() === 'w');
-            white.classList.toggle('low', clocks.white <= 20);
+            white.textContent = fmtTime(clocks.white);
+            white.classList.toggle('active', game.started && chess?.turn() === 'w');
+            white.classList.toggle('danger', clocks.white <= 20);
         }
 
         if (black) {
-            black.textContent = formatTime(clocks.black);
-            black.classList.toggle('active', state.gameStarted && chess?.turn() === 'b');
-            black.classList.toggle('low', clocks.black <= 20);
+            black.textContent = fmtTime(clocks.black);
+            black.classList.toggle('active', game.started && chess?.turn() === 'b');
+            black.classList.toggle('danger', clocks.black <= 20);
         }
     }
 
     function stopClock() {
-        if (clockInterval) clearInterval(clockInterval);
-        clockInterval = null;
+        clearInterval(clockTimer);
+        clockTimer = null;
     }
 
-    // This is a visual clock only; the server remains authoritative.
-    function startVisualClock() {
+    // Display estimation only; the server controls actual game time.
+    function startDisplayClock() {
         stopClock();
-        lastClockTick = Date.now();
+        clockTimestamp = Date.now();
 
-        clockInterval = setInterval(() => {
-            if (!state.gameStarted || state.gameOver) return;
+        clockTimer = setInterval(() => {
+            if (!game.started || game.over || !chess) return;
 
-            const now = Date.now();
-            const elapsed = (now - lastClockTick) / 1000;
-            lastClockTick = now;
+            const elapsed = (Date.now() - clockTimestamp) / 1000;
+            clockTimestamp = Date.now();
 
-            const turn = chess?.turn();
-            if (turn === 'w') clocks.white = Math.max(0, clocks.white - elapsed);
-            if (turn === 'b') clocks.black = Math.max(0, clocks.black - elapsed);
+            if (chess.turn() === 'w') clocks.white = Math.max(0, clocks.white - elapsed);
+            else clocks.black = Math.max(0, clocks.black - elapsed);
 
-            updateClocks();
-        }, 250);
+            renderClocks();
+        }, 500);
     }
 
-    // ==========================================
-    // BOARD RENDERING
-    // ==========================================
+    // =============================================
+    // BOARD
+    // =============================================
 
     function renderBoard() {
         const board = $('#rqChessBoard');
-        if (!board || !chessLoaded || !chess) return;
+        if (!board) return;
+
+        if (!chessReady || !chess) {
+            board.innerHTML = '<div style="grid-column:1/9;display:flex;align-items:center;justify-content:center;color:#888">Загрузка шахмат...</div>';
+            return;
+        }
 
         const rows = chess.board();
         const files = ['a','b','c','d','e','f','g','h'];
         let html = '';
 
-        for (let row = 0; row < 8; row++) {
-            for (let col = 0; col < 8; col++) {
-                const piece = rows[row][col];
-                const square = files[col] + (8 - row);
-                const light = (row + col) % 2 === 0;
-                const selected = selectedSquare === square;
-                const legal = legalMoves.some(move => move.to === square);
-                const capture = legal && chess.get(square);
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const piece = rows[r][c];
+                const square = files[c] + (8 - r);
+                const light = (r + c) % 2 === 0;
+                const isSelected = selected === square;
+                const legal = moves.some(m => m.to === square);
+                const capture = legal && !!chess.get(square);
 
                 let classes = `rq-square ${light ? 'light' : 'dark'}`;
-
-                if (selected) classes += ' selected';
-                if (lastMoveSquares.includes(square)) classes += ' last-move';
+                if (isSelected) classes += ' selected';
+                if (lastMove.includes(square)) classes += ' last-move';
                 if (legal) classes += capture ? ' capture' : ' legal';
 
                 let pieceHTML = '';
 
                 if (piece) {
-                    const color = piece.color === 'w' ? 'white' : 'black';
-
-                    pieceHTML = `
-                        <img class="rq-piece"
-                             draggable="false"
-                             alt="${color} ${piece.type}"
-                             src="${getPieceImage(piece.type, color)}">
-                    `;
+                    const side = piece.color === 'w' ? 'white' : 'black';
+                    pieceHTML = `<img class="rq-piece" draggable="false" alt="${side} ${piece.type}" src="${pieceSVG(piece.type, side)}">`;
                 }
 
-                html += `
-                    <div class="${classes}" data-square="${square}">
-                        ${pieceHTML}
-                    </div>
-                `;
+                html += `<div class="${classes}" data-square="${square}">${pieceHTML}</div>`;
             }
         }
 
         board.innerHTML = html;
 
-        $$('.rq-square', board).forEach(square => {
-            square.addEventListener('click', () => handleSquareClick(square.dataset.square));
+        $$('.rq-square', board).forEach(el => {
+            el.addEventListener('click', () => clickSquare(el.dataset.square));
         });
     }
 
-    // ==========================================
-    // MOVE HANDLING
-    // ==========================================
+    // =============================================
+    // MOVE SELECTION
+    // =============================================
 
-    function handleSquareClick(square) {
-        if (!chessLoaded || !chess || !state.connected) return;
-        if (state.boardLocked || state.gameOver || !state.gameStarted) return;
+    function clickSquare(square) {
+        if (!chessReady || !chess || !game.connected) return;
+        if (game.locked || game.over || !game.started) return;
 
         const piece = chess.get(square);
-        const myColor = playerColor === 'white' ? 'w' : 'b';
+        const myTurnColor = color === 'white' ? 'w' : 'b';
 
-        if (selectedSquare) {
-            const move = legalMoves.find(item => item.to === square);
+        if (selected) {
+            const target = moves.find(m => m.to === square);
 
-            if (move) {
-                sendMove(selectedSquare, square, move);
+            if (target) {
+                sendMove(selected, square, target);
                 return;
             }
         }
 
-        if (piece && piece.color === myColor && chess.turn() === myColor) {
-            selectedSquare = square;
-            legalMoves = chess.moves({ square, verbose: true });
+        if (piece && piece.color === myTurnColor && chess.turn() === myTurnColor) {
+            selected = square;
+            moves = chess.moves({ square, verbose: true });
             renderBoard();
             return;
         }
 
-        selectedSquare = null;
-        legalMoves = [];
+        selected = null;
+        moves = [];
         renderBoard();
     }
 
     function sendMove(from, to, move) {
         if (!socket || socket.readyState !== WebSocket.OPEN) {
-            showToast('Нет соединения с сервером');
+            toast('Нет соединения с сервером');
             return;
         }
+
+        const promotion = move.flags?.includes('p') ? 'q' : '';
 
         socket.send(JSON.stringify({
             type: 'move',
             from,
             to,
-            promotion: move.flags.includes('p') ? 'q' : ''
+            promotion
         }));
 
-        lastMoveSquares = [from, to];
-        selectedSquare = null;
-        legalMoves = [];
+        lastMove = [from, to];
+        selected = null;
+        moves = [];
         renderBoard();
     }
 
-    // ==========================================
+    // =============================================
     // GAME RESULT
-    // ==========================================
+    // =============================================
 
-    function showGameResult(result) {
-        const element = $('#rqResult');
-        if (!element) return;
+    function result(value) {
+        if (gameResultShown) return;
+        gameResultShown = true;
+
+        const el = $('#rqResult');
+        if (!el) return;
 
         let title = 'НИЧЬЯ';
         let description = 'Партия завершилась вничью';
 
-        if (result === 'white' || result === '1-0') {
-            title = playerColor === 'white' ? 'ПОБЕДА' : 'ПОРАЖЕНИЕ';
-            description = playerColor === 'white' ? 'Вы выиграли партию' : 'Победили белые';
+        if (value === 'white' || value === '1-0') {
+            title = color === 'white' ? 'ПОБЕДА' : 'ПОРАЖЕНИЕ';
+            description = 'Победили белые';
         }
 
-        if (result === 'black' || result === '0-1') {
-            title = playerColor === 'black' ? 'ПОБЕДА' : 'ПОРАЖЕНИЕ';
-            description = playerColor === 'black' ? 'Вы выиграли партию' : 'Победили чёрные';
+        if (value === 'black' || value === '0-1') {
+            title = color === 'black' ? 'ПОБЕДА' : 'ПОРАЖЕНИЕ';
+            description = 'Победили чёрные';
         }
 
-        element.innerHTML = `
-            <div class="rq-game-result">
+        el.innerHTML = `
+            <div class="rq-result">
                 <h2>${title}</h2>
                 <div style="color:#aaa">${description}</div>
+                <div style="color:#777;font-size:11px;margin-top:8px">${modeName()} · ${MODES[mode].label}</div>
                 <button id="rqNewGame">Новая игра</button>
             </div>
         `;
 
         $('#rqNewGame')?.addEventListener('click', () => {
             leaveRoom();
-            element.innerHTML = '';
         });
 
-        loadMyProfile();
+        loadProfile();
         loadLeaderboard();
     }
 
-    // ==========================================
+    // =============================================
     // ROOM CONTROLS
-    // ==========================================
+    // =============================================
 
-    async function copyRoomCode() {
-        const code = $('#rqRoomCode')?.value || roomId;
+    async function copyCode() {
+        const code = $('#rqRoomCode')?.value || room;
         if (!code) return;
 
         try {
-            if (navigator.clipboard?.writeText) {
-                await navigator.clipboard.writeText(code);
-                showToast('Код комнаты скопирован');
-            } else {
-                const input = $('#rqRoomCode');
-                input.select();
-                document.execCommand('copy');
-                showToast('Код комнаты скопирован');
-            }
+            await navigator.clipboard.writeText(code);
+            toast('Код комнаты скопирован');
         } catch {
-            showToast('Не удалось скопировать код');
+            toast('Не удалось скопировать код');
         }
     }
 
     function leaveRoom() {
         stopClock();
+        disconnectSocket();
 
-        if (socket) {
-            socket.onclose = null;
-            socket.close();
-            socket = null;
-        }
+        room = null;
+        color = null;
+        selected = null;
+        moves = [];
+        lastMove = [];
+        profiles = {};
+        gameResultShown = false;
 
-        roomId = null;
-        playerColor = null;
-        selectedSquare = null;
-        legalMoves = [];
-        lastMoveSquares = [];
+        game.connected = false;
+        game.started = false;
+        game.over = false;
+        game.locked = true;
 
-        state.connected = false;
-        state.gameStarted = false;
-        state.gameOver = false;
-        state.boardLocked = true;
+        clocks.white = MODES[mode].seconds;
+        clocks.black = MODES[mode].seconds;
 
-        currentProfiles = {};
-        currentPlayer = null;
-        opponentPlayer = null;
+        if (chessReady) chess = new window.Chess();
 
-        clocks.white = MODES[selectedMode].time;
-        clocks.black = MODES[selectedMode].time;
-
-        if (chessLoaded && window.Chess) {
-            chess = new window.Chess();
-            renderBoard();
-        }
-
-        renderPlayerCard(null, 'white');
-        renderPlayerCard(null, 'black');
+        renderBoard();
+        playerCard(null, 'white');
+        playerCard(null, 'black');
 
         const controls = $('#rqRoomControls');
         if (controls) controls.style.display = 'none';
 
-        const result = $('#rqResult');
-        if (result) result.innerHTML = '';
+        const resultBox = $('#rqResult');
+        if (resultBox) resultBox.innerHTML = '';
 
-        setStatus('Выбери режим и создай комнату');
-        updateClocks();
+        status('Выбери режим и создай комнату');
+        renderClocks();
     }
 
-    // ==========================================
-    // STARTUP
-    // ==========================================
+    // =============================================
+    // START
+    // =============================================
 
     async function start() {
-        if (currentUser) {
-            const nameElement = $('#username');
-            if (nameElement) nameElement.textContent = getDisplayName(currentUser);
-        }
+        if (user && $('#username')) $('#username').textContent = displayName(user);
 
-        await registerPlayer();
-        await loadMyProfile();
-        await loadLeaderboard();
+        await register();
+        await loadProfile();
+        loadLeaderboard();
     }
 
     showHome();
 
-    start().catch(error => {
-        console.error('REQUIEM initialization error:', error);
-    });
-
+    start().catch(e => console.error('REQUIEM startup:', e));
 });
