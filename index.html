@@ -1,1161 +1,234 @@
-/* =========================================================
-   REQUIEM — APP.JS
-   Frontend adapted to the supplied index.html
-   ========================================================= */
-
-document.addEventListener('DOMContentLoaded', () => {
-    'use strict';
-
-    // ---------------- CONFIG ----------------
-
-    const tg = window.Telegram?.WebApp;
-    const API_URL = 'https://requiem-bot-7eyu.onrender.com';
-
-    const $ = (selector, root = document) => root.querySelector(selector);
-    const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-
-    const state = {
-        user: null,
-        player: null,
-        page: 'home',
-        chess: {
-            mode: 'blitz',
-            room: null,
-            ws: null,
-            game: null,
-            color: 'white',
-            selected: null,
-            legalMoves: [],
-            timerWhite: 300,
-            timerBlack: 300,
-            timerInterval: null,
-            connected: false,
-            started: false,
-            gameOver: false,
-            busy: false
-        }
-    };
-
-    // ---------------- TELEGRAM ----------------
-
-    if (tg) {
-        tg.ready();
-        tg.expand();
-
-        try {
-            tg.setHeaderColor('#080808');
-            tg.setBackgroundColor('#080808');
-        } catch (_) {}
-
-        state.user = tg.initDataUnsafe?.user || null;
-    }
-
-    // ---------------- HELPERS ----------------
-
-    function escapeHTML(value) {
-        return String(value ?? '').replace(/[&<>"']/g, char => ({
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#39;'
-        }[char]));
-    }
-
-    function toast(message) {
-        const element = $('#toast');
-        if (!element) return;
-
-        element.textContent = message;
-        element.classList.add('show');
-
-        clearTimeout(toast._timer);
-        toast._timer = setTimeout(() => {
-            element.classList.remove('show');
-        }, 2600);
-    }
-
-    async function api(path, options = {}) {
-        const headers = {
-            'Content-Type': 'application/json',
-            ...(options.headers || {})
-        };
-
-        const response = await fetch(`${API_URL}${path}`, {
-            ...options,
-            headers
-        });
-
-        const text = await response.text();
-        let data = {};
-
-        try {
-            data = text ? JSON.parse(text) : {};
-        } catch (_) {
-            data = { detail: text };
-        }
-
-        if (!response.ok) {
-            throw new Error(data.detail || data.message || `Ошибка ${response.status}`);
-        }
-
-        return data;
-    }
-
-    function telegramInitData() {
-        return tg?.initData || '';
-    }
-
-    function getTelegramId() {
-        return state.user?.id || null;
-    }
-
-    function getUsername() {
-        if (state.user?.username) return state.user.username;
-
-        const first = state.user?.first_name || '';
-        const last = state.user?.last_name || '';
-
-        return `${first} ${last}`.trim() || 'Игрок';
-    }
-
-    function getAvatar() {
-        return state.user?.photo_url || '';
-    }
-
-    // ---------------- PLAYER ----------------
-
-    async function registerPlayer() {
-        if (!tg?.initData) {
-            updatePlayerUI({
-                username: 'Игрок',
-                level: 1,
-                xp: 0,
-                crystals: 0
-            });
-            return;
-        }
-
-        try {
-            const result = await api('/api/register', {
-                method: 'POST',
-                body: JSON.stringify({
-                    initData: telegramInitData(),
-                    user: state.user
-                })
-            });
-
-            state.player = result.player || result;
-            updatePlayerUI(state.player);
-        } catch (error) {
-            console.warn('[REQUIEM] Register error:', error);
-            updatePlayerUI({
-                username: getUsername(),
-                level: 1,
-                xp: 0,
-                crystals: 0
-            });
-        }
-    }
-
-    function updatePlayerUI(player = {}) {
-        const username = player.username || player.name || getUsername();
-        const level = player.level ?? 1;
-        const xp = player.xp ?? 0;
-        const crystals = player.crystals ?? 0;
-
-        if ($('#username')) $('#username').textContent = username;
-        if ($('#level')) $('#level').textContent = level;
-        if ($('#xp')) $('#xp').textContent = xp;
-        if ($('#crystals')) $('#crystals').textContent = crystals;
-
-        const fill = $('#xpFill');
-        if (fill) {
-            fill.style.width = `${Math.max(0, Math.min(100, xp))}%`;
-        }
-
-        const avatar = $('.profile .avatar');
-        if (avatar) {
-            const photo = player.avatar || player.photo_url || getAvatar();
-
-            if (photo) {
-                avatar.innerHTML = `<img src="${escapeHTML(photo)}" alt="Аватар" />`;
-            } else {
-                avatar.textContent = username.charAt(0).toUpperCase() || 'R';
-            }
-        }
-    }
-
-    // ---------------- NAVIGATION ----------------
-
-    function hideMainSections() {
-        const selectors = [
-            '.hero',
-            '.profile',
-            '.stats',
-            '.menu',
-            '.section-heading',
-            '#gamesHub',
-            '#chessScreen',
-            '#ratingSection'
-        ];
-
-        selectors.forEach(selector => {
-            $$(selector).forEach(element => {
-                element.style.display = 'none';
-            });
-        });
-    }
-
-    function setNavActive(page) {
-        $$('.nav-item').forEach(button => {
-            button.classList.toggle('active', button.dataset.page === page);
-        });
-    }
-
-    function showHome() {
-        stopChessTimer();
-        hideMainSections();
-
-        ['.hero', '.profile', '.stats', '.menu'].forEach(selector => {
-            const element = $(selector);
-            if (element) element.style.display = '';
-        });
-
-        setNavActive('home');
-        state.page = 'home';
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-
-    function showGames() {
-        stopChessTimer();
-        hideMainSections();
-
-        const hub = $('#gamesHub');
-        if (hub) {
-            hub.style.display = 'block';
-            hub.querySelectorAll('.section-heading').forEach(el => {
-                el.style.display = '';
-            });
-        }
-
-        setNavActive('games');
-        state.page = 'games';
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-
-    function showChess() {
-        hideMainSections();
-
-        const screen = $('#chessScreen');
-        const mount = $('#chessMount');
-
-        if (!screen || !mount) {
-            toast('Шахматный экран не найден');
-            return;
-        }
-
-        screen.style.display = 'block';
-
-        // Восстанавливаем заголовки внутри шахматного экрана
-        screen.querySelectorAll('.section-heading').forEach(el => {
-            el.style.display = '';
-        });
-
-        setNavActive('games');
-        state.page = 'chess';
-
-        initChessUI();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-
-    function showRating() {
-        hideMainSections();
-
-        const section = $('#ratingSection');
-        if (section) section.style.display = 'block';
-
-        setNavActive('rating');
-        state.page = 'rating';
-        loadLeaderboard();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-
-    function showSimplePage(page) {
-        toast(`Раздел «${page}» пока в разработке`);
-    }
-
-    // ---------------- CHESS LIBRARY ----------------
-
-    function loadChessLibrary() {
-        return new Promise((resolve, reject) => {
-            if (window.Chess) {
-                resolve();
-                return;
-            }
-
-            const existing = $('#requiemChessLib');
-            if (existing) {
-                existing.addEventListener('load', resolve, { once: true });
-                existing.addEventListener('error', reject, { once: true });
-                return;
-            }
-
-            const script = document.createElement('script');
-            script.id = 'requiemChessLib';
-            script.src = 'https://cdn.jsdelivr.net/npm/chess.js@1.4.0/dist/chess.js';
-            script.onload = resolve;
-            script.onerror = () => reject(new Error('Не удалось загрузить шахматный движок'));
-            document.head.appendChild(script);
-        });
-    }
-
-    // ---------------- CHESS UI ----------------
-
-    function initChessUI() {
-        const mount = $('#chessMount');
-        if (!mount) return;
-
-        mount.innerHTML = `
-            <div class="rq-chess">
-
-                <div class="rq-chess-header">
-                    <div>
-                        <small class="rq-eyebrow">REQUIEM CHESS</small>
-                        <h2>Шахматы</h2>
-                    </div>
-                    <div class="rq-online-status" id="rqChessStatus">
-                        <span class="rq-status-dot"></span>
-                        <span>Не в игре</span>
-                    </div>
-                </div>
-
-                <div class="rq-mode-list">
-                    <button class="rq-mode active" data-mode="bullet">
-                        <strong>Bullet</strong>
-                        <small>2 минуты</small>
-                    </button>
-                    <button class="rq-mode" data-mode="blitz">
-                        <strong>Blitz</strong>
-                        <small>5 минут</small>
-                    </button>
-                    <button class="rq-mode" data-mode="rapid">
-                        <strong>Rapid</strong>
-                        <small>10 минут</small>
-                    </button>
-                </div>
-
-                <div class="rq-rating-row">
-                    <div class="rq-rating-card">
-                        <small>ТВОЙ ELO</small>
-                        <strong id="rqChessElo">1000</strong>
-                    </div>
-                    <div class="rq-rating-card">
-                        <small>РЕЖИМ</small>
-                        <strong id="rqChessModeLabel">BLITZ</strong>
-                    </div>
-                </div>
-
-                <div class="rq-room-panel panel">
-                    <div class="rq-room-actions">
-                        <button class="rq-primary-btn" id="rqCreateRoom">
-                            Создать игру
-                        </button>
-                        <button class="rq-secondary-btn" id="rqJoinToggle">
-                            Войти по коду
-                        </button>
-                    </div>
-
-                    <div id="rqJoinForm" style="display:none">
-                        <input id="rqRoomCode" type="text" maxlength="12"
-                            placeholder="Код комнаты" autocomplete="off" />
-                        <button class="rq-primary-btn" id="rqJoinRoom">
-                            Подключиться
-                        </button>
-                    </div>
-
-                    <div id="rqRoomInfo" style="display:none"></div>
-                </div>
-
-                <div id="rqChessGame" style="display:none">
-                    <div class="rq-chess-clock-row">
-                        <div class="rq-clock" id="rqBlackClock">05:00</div>
-                        <span id="rqOpponentLabel">Соперник</span>
-                    </div>
-
-                    <div class="rq-board-wrap">
-                        <div id="rqChessBoard" class="rq-board"></div>
-                    </div>
-
-                    <div class="rq-chess-clock-row rq-clock-bottom">
-                        <div class="rq-clock" id="rqWhiteClock">05:00</div>
-                        <span id="rqPlayerLabel">Ты · Белые</span>
-                    </div>
-
-                    <div id="rqChessMessage" class="rq-chess-message">
-                        Ожидание соперника
-                    </div>
-
-                    <div class="rq-game-buttons">
-                        <button class="rq-secondary-btn" id="rqLeaveRoom">
-                            Покинуть игру
-                        </button>
-                    </div>
-                </div>
-
-                <div class="rq-chess-help">
-                    <strong>Как играть</strong>
-                    <p>Создай комнату и отправь код другу или подключись к существующей. Нажми на фигуру, затем на клетку для хода.</p>
-                </div>
-
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#080808">
+    <title>REQUIEM</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+
+<div class="ambient" aria-hidden="true">
+    <div class="ambient-glow"></div>
+    <span class="slash slash-a"></span>
+    <span class="slash slash-b"></span>
+    <span class="slash slash-c"></span>
+    <span class="slash slash-d"></span>
+    <span class="slash slash-e"></span>
+    <span class="square square-a"></span>
+    <span class="square square-b"></span>
+    <span class="square square-c"></span>
+    <span class="square square-d"></span>
+    <span class="square square-e"></span>
+    <span class="square square-f"></span>
+</div>
+
+<main class="app">
+
+    <header class="header">
+        <div class="brand">
+            <span class="brand-mark">R</span>
+            <div class="brand-text">REQUIEM <b>BOT</b></div>
+        </div>
+        <button class="icon-btn" id="settings" aria-label="Настройки">⚙</button>
+    </header>
+
+    <section class="hero">
+        <div class="hero-label">
+            <span class="status-dot"></span>
+            PLAYER SPACE
+        </div>
+        <h1>ТВОЯ<br><span>ИСТОРИЯ.</span></h1>
+        <p>Каждый день — новый уровень.</p>
+        <div class="hero-line"></div>
+    </section>
+
+    <section class="profile panel">
+        <div class="profile-top">
+            <div class="avatar">R</div>
+            <div class="profile-info">
+                <h2 id="username">Игрок</h2>
+                <p>Уровень <span id="level">1</span></p>
             </div>
-        `;
-
-        addChessStyles();
-        bindChessUI();
-        loadChessLibrary().then(() => {
-            if (!state.chess.game) {
-                state.chess.game = new window.Chess();
-            }
-            renderBoard();
-        }).catch(error => {
-            console.error(error);
-            toast('Не удалось загрузить шахматы');
-        });
-
-        loadMyChessRating();
-    }
-
-    // ---------------- CHESS CSS ----------------
-
-    function addChessStyles() {
-        if ($('#requiemChessStyles')) return;
-
-        const style = document.createElement('style');
-        style.id = 'requiemChessStyles';
-        style.textContent = `
-            .rq-chess { color:#eee; margin-top:10px; }
-            .rq-chess-header { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:18px; }
-            .rq-chess-header h2 { margin:5px 0 0; font-size:26px; }
-            .rq-eyebrow { color:#e20b25; letter-spacing:3px; font-size:10px; }
-            .rq-online-status { font-size:11px; color:#888; display:flex; align-items:center; gap:7px; }
-            .rq-status-dot { width:7px;height:7px;border-radius:50%;background:#666;display:inline-block; }
-            .rq-online-status.connected .rq-status-dot { background:#35c878; box-shadow:0 0 8px #35c878; }
-            .rq-mode-list { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px; }
-            .rq-mode { border:1px solid #252525; background:#111; color:#888; border-radius:12px; padding:12px 4px; cursor:pointer; }
-            .rq-mode strong,.rq-mode small { display:block; }
-            .rq-mode strong { font-size:13px; }
-            .rq-mode small { font-size:10px; margin-top:5px; }
-            .rq-mode.active { color:#fff; border-color:#e20b25; background:#1b1012; }
-            .rq-rating-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
-            .rq-rating-card { padding:15px; border:1px solid #242424; background:#111; border-radius:12px; }
-            .rq-rating-card small { display:block; font-size:10px; color:#888; }
-            .rq-rating-card strong { display:block; font-size:24px; margin-top:6px; }
-            .rq-room-panel { padding:14px; border:1px solid #222; border-radius:14px; background:#111; }
-            .rq-room-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-            .rq-primary-btn,.rq-secondary-btn { border:0; border-radius:10px; padding:13px 10px; font-weight:700; cursor:pointer; }
-            .rq-primary-btn { background:#e20b25; color:white; }
-            .rq-secondary-btn { background:#222; color:#ddd; }
-            #rqJoinForm { display:flex; gap:8px; margin-top:10px; }
-            #rqJoinForm input { min-width:0; flex:1; background:#090909; border:1px solid #333; color:#fff; padding:12px; border-radius:9px; }
-            #rqJoinForm button { flex:1; }
-            #rqRoomInfo { margin-top:12px; font-size:13px; }
-            .rq-room-code { font-size:22px; font-weight:900; letter-spacing:4px; color:#fff; padding:8px 0; }
-            .rq-copy-btn { background:#242424; color:#eee; border:0; padding:9px 12px; border-radius:8px; }
-            .rq-chess-clock-row { display:flex; justify-content:space-between; align-items:center; padding:12px 3px; font-size:12px; color:#888; }
-            .rq-clock { font-size:20px; font-weight:800; background:#171717; color:#eee; padding:8px 13px; border-radius:8px; min-width:76px; text-align:center; }
-            .rq-clock.active { border:1px solid #e20b25; }
-            .rq-clock.low { color:#ff3158; }
-            .rq-board-wrap { width:100%; max-width:480px; margin:0 auto; }
-            .rq-board { width:100%; aspect-ratio:1/1; display:grid; grid-template-columns:repeat(8,1fr); overflow:hidden; border:2px solid #333; border-radius:5px; touch-action:manipulation; }
-            .rq-square { position:relative; display:flex; align-items:center; justify-content:center; aspect-ratio:1/1; cursor:pointer; font-size:clamp(28px,8vw,48px); line-height:1; user-select:none; }
-            .rq-square.light { background:#e0d4c2; }
-            .rq-square.dark { background:#705c4e; }
-            .rq-square.selected { box-shadow:inset 0 0 0 4px #e20b25; }
-            .rq-square.last-move { box-shadow:inset 0 0 0 3px #d2a84c; }
-            .rq-square.legal::after { content:""; position:absolute; width:24%; height:24%; border-radius:50%; background:#1b1b1b55; }
-            .rq-square.capture::after { width:85%; height:85%; background:transparent; border:4px solid #e20b2566; border-radius:50%; }
-            .rq-piece { position:relative; z-index:1; text-shadow:0 2px 3px #0005; }
-            .rq-piece.white { color:#fff; text-shadow:0 2px 3px #333,0 0 2px #333; }
-            .rq-piece.black { color:#171717; text-shadow:0 1px 2px #fff3; }
-            .rq-chess-message { text-align:center; font-size:12px; color:#999; padding:12px 5px; }
-            .rq-game-buttons { margin-top:8px; }
-            .rq-game-buttons button { width:100%; }
-            .rq-chess-help { margin-top:18px; padding:14px; border:1px solid #222; border-radius:12px; background:#101010; }
-            .rq-chess-help p { color:#888; font-size:12px; line-height:1.6; margin-bottom:0; }
-            @media (max-width:380px) { .rq-room-actions { grid-template-columns:1fr; } }
-        `;
-        document.head.appendChild(style);
-    }
-
-    // ---------------- CHESS EVENTS ----------------
-
-    function bindChessUI() {
-        const mount = $('#chessMount');
-        if (!mount) return;
-
-        mount.onclick = async event => {
-            const target = event.target.closest('button');
-            if (!target) return;
-
-            if (target.matches('[data-mode]')) {
-                chooseChessMode(target.dataset.mode);
-                return;
-            }
-
-            switch (target.id) {
-                case 'rqCreateRoom':
-                    await createRoom();
-                    break;
-
-                case 'rqJoinToggle': {
-                    const form = $('#rqJoinForm');
-                    if (form) form.style.display = form.style.display === 'none' ? 'flex' : 'none';
-                    break;
-                }
-
-                case 'rqJoinRoom':
-                    await joinRoom($('#rqRoomCode')?.value);
-                    break;
-
-                case 'rqLeaveRoom':
-                    leaveRoom();
-                    break;
-
-                case 'rqCopyCode':
-                    copyRoomCode();
-                    break;
-            }
-
-            if (target.classList.contains('rq-square')) {
-                handleSquareClick(target.dataset.square);
-            }
-        };
-    }
-
-    function chooseChessMode(mode) {
-        if (!['bullet', 'blitz', 'rapid'].includes(mode)) return;
-        if (state.chess.room) {
-            toast('Сначала покинь текущую комнату');
-            return;
-        }
-
-        state.chess.mode = mode;
-
-        $$('.rq-mode').forEach(button => {
-            button.classList.toggle('active', button.dataset.mode === mode);
-        });
-
-        const labels = {
-            bullet: 'BULLET',
-            blitz: 'BLITZ',
-            rapid: 'RAPID'
-        };
-
-        const ratings = {
-            bullet: 120,
-            blitz: 300,
-            rapid: 600
-        };
-
-        const label = $('#rqChessModeLabel');
-        if (label) label.textContent = labels[mode];
-
-        state.chess.timerWhite = ratings[mode];
-        state.chess.timerBlack = ratings[mode];
-
-        renderClocks();
-        loadMyChessRating();
-    }
-
-    // ---------------- ROOM CREATE / JOIN ----------------
-
-    async function createRoom() {
-        if (state.chess.busy) return;
-        state.chess.busy = true;
-
-        try {
-            const result = await api('/api/chess/create', {
-                method: 'POST',
-                body: JSON.stringify({
-                    mode: state.chess.mode,
-                    initData: telegramInitData()
-                })
-            });
-
-            const roomId = result.room_id || result.room || result.code || result.id;
-            if (!roomId) throw new Error('Сервер не вернул код комнаты');
-
-            state.chess.room = String(roomId);
-            state.chess.color = result.color || 'white';
-
-            showRoomInfo(roomId);
-            connectRoom(roomId);
-            toast('Комната создана');
-        } catch (error) {
-            console.error('[REQUIEM] create room:', error);
-            toast(error.message || 'Не удалось создать комнату');
-        } finally {
-            state.chess.busy = false;
-        }
-    }
-
-    async function joinRoom(code) {
-        const roomId = String(code || '').trim();
-        if (!roomId) {
-            toast('Введи код комнаты');
-            return;
-        }
-
-        if (state.chess.busy) return;
-        state.chess.busy = true;
-
-        try {
-            state.chess.room = roomId;
-            state.chess.color = 'black';
-
-            showRoomInfo(roomId);
-            connectRoom(roomId);
-            toast('Подключение к комнате...');
-        } catch (error) {
-            state.chess.room = null;
-            console.error('[REQUIEM] join room:', error);
-            toast(error.message || 'Не удалось подключиться');
-        } finally {
-            state.chess.busy = false;
-        }
-    }
-
-    function showRoomInfo(roomId) {
-        const info = $('#rqRoomInfo');
-        if (!info) return;
-
-        info.style.display = 'block';
-        info.innerHTML = `
-            <div>Код комнаты</div>
-            <div class="rq-room-code">${escapeHTML(roomId)}</div>
-            <button class="rq-copy-btn" id="rqCopyCode">Копировать код</button>
-        `;
-
-        const game = $('#rqChessGame');
-        if (game) game.style.display = 'block';
-
-        setChessStatus('Подключение...');
-        setChessMessage('Подключение к комнате...');
-
-        renderBoard();
-    }
-
-    async function copyRoomCode() {
-        if (!state.chess.room) return;
-
-        try {
-            await navigator.clipboard.writeText(state.chess.room);
-            toast('Код скопирован');
-        } catch (_) {
-            toast(`Код комнаты: ${state.chess.room}`);
-        }
-    }
-
-    // ---------------- WEBSOCKET ----------------
-
-    function connectRoom(roomId) {
-        disconnectSocket();
-
-        const initData = encodeURIComponent(telegramInitData());
-        const url = `wss://requiem-bot-7eyu.onrender.com/ws/chess/${encodeURIComponent(roomId)}?initData=${initData}`;
-
-        let socket;
-
-        try {
-            socket = new WebSocket(url);
-        } catch (error) {
-            console.error(error);
-            setChessStatus('Ошибка соединения');
-            toast('WebSocket не удалось открыть');
-            return;
-        }
-
-        state.chess.ws = socket;
-
-        socket.onopen = () => {
-            state.chess.connected = true;
-            setChessStatus('Подключено', true);
-        };
-
-        socket.onmessage = event => {
-            let data;
-
-            try {
-                data = JSON.parse(event.data);
-            } catch (_) {
-                console.warn('[REQUIEM] WS non-JSON:', event.data);
-                return;
-            }
-
-            handleSocketMessage(data);
-        };
-
-        socket.onerror = error => {
-            console.error('[REQUIEM] WebSocket error:', error);
-            setChessStatus('Ошибка соединения');
-        };
-
-        socket.onclose = () => {
-            state.chess.connected = false;
-            if (state.chess.room) setChessStatus('Соединение закрыто');
-        };
-    }
-
-    function disconnectSocket() {
-        const socket = state.chess.ws;
-        state.chess.ws = null;
-        state.chess.connected = false;
-
-        if (socket) {
-            socket.onclose = null;
-            try {
-                socket.close();
-            } catch (_) {}
-        }
-    }
-
-    function handleSocketMessage(data) {
-        console.log('[REQUIEM WS]', data);
-
-        const type = String(data.type || data.event || '').toLowerCase();
-
-        if (type === 'error') {
-            toast(data.message || data.detail || 'Ошибка комнаты');
-            return;
-        }
-
-        if (type === 'joined' || type === 'join' || type === 'room_joined') {
-            if (data.color) state.chess.color = data.color;
-            setChessMessage(data.message || 'Ты подключился к комнате');
-        }
-
-        if (type === 'start' || type === 'game_start' || type === 'started') {
-            state.chess.started = true;
-            setChessMessage('Партия началась');
-        }
-
-        if (type === 'move' || type === 'game_state' || type === 'state' || data.fen) {
-            applyServerGameState(data);
-        }
-
-        if (type === 'game_over' || type === 'result' || data.game_over) {
-            state.chess.gameOver = true;
-            stopChessTimer();
-            setChessMessage(data.message || data.result || 'Партия завершена');
-        }
-
-        if (data.fen) applyServerGameState(data);
-        if (data.color) state.chess.color = data.color;
-        if (data.white_time != null) state.chess.timerWhite = Number(data.white_time);
-        if (data.black_time != null) state.chess.timerBlack = Number(data.black_time);
-
-        renderClocks();
-    }
-
-    function applyServerGameState(data) {
-        if (!state.chess.game) return;
-
-        const fen = data.fen || data.state?.fen;
-        if (fen) {
-            try {
-                state.chess.game.load(fen);
-                state.chess.selected = null;
-                state.chess.legalMoves = [];
-                renderBoard();
-            } catch (error) {
-                console.warn('[REQUIEM] Invalid FEN:', fen, error);
-            }
-        }
-
-        if (data.color) state.chess.color = data.color;
-        if (data.turn) {
-            const turn = String(data.turn).toLowerCase();
-            state.chess.started = true;
-            if (turn === 'white' || turn === 'w') setChessMessage('Ход белых');
-            if (turn === 'black' || turn === 'b') setChessMessage('Ход чёрных');
-        }
-
-        if (data.white_time != null) state.chess.timerWhite = Number(data.white_time);
-        if (data.black_time != null) state.chess.timerBlack = Number(data.black_time);
-
-        renderClocks();
-    }
-
-    // ---------------- BOARD ----------------
-
-    const PIECES = {
-        w: { k: '♔', q: '♕', r: '♖', b: '♗', n: '♘', p: '♙' },
-        b: { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' }
-    };
-
-    function renderBoard() {
-        const boardElement = $('#rqChessBoard');
-        const game = state.chess.game;
-        if (!boardElement || !game) return;
-
-        const board = game.board();
-        const flipped = state.chess.color === 'black';
-
-        boardElement.innerHTML = '';
-
-        for (let row = 0; row < 8; row++) {
-            for (let col = 0; col < 8; col++) {
-                const actualRow = flipped ? 7 - row : row;
-                const actualCol = flipped ? 7 - col : col;
-
-                const squareName = 'abcdefgh'[actualCol] + (8 - actualRow);
-                const piece = board[actualRow][actualCol];
-
-                const square = document.createElement('button');
-                square.type = 'button';
-                square.className = `rq-square ${(row + col) % 2 === 0 ? 'light' : 'dark'}`;
-                square.dataset.square = squareName;
-                square.setAttribute('aria-label', squareName);
-
-                if (state.chess.selected === squareName) {
-                    square.classList.add('selected');
-                }
-
-                if (state.chess.legalMoves.includes(squareName)) {
-                    square.classList.add('legal');
-
-                    const targetPiece = game.get(squareName);
-                    if (targetPiece) square.classList.add('capture');
-                }
-
-                if (piece) {
-                    const glyph = PIECES[piece.color][piece.type];
-                    const span = document.createElement('span');
-                    span.className = `rq-piece ${piece.color === 'w' ? 'white' : 'black'}`;
-                    span.textContent = glyph;
-                    square.appendChild(span);
-                }
-
-                boardElement.appendChild(square);
-            }
-        }
-    }
-
-    function handleSquareClick(squareName) {
-        const game = state.chess.game;
-        if (!game || !state.chess.room || state.chess.gameOver) return;
-        if (!state.chess.connected) {
-            toast('Нет соединения с комнатой');
-            return;
-        }
-
-        if (!state.chess.started) {
-            toast('Ожидай начала партии');
-            return;
-        }
-
-        const turnColor = game.turn() === 'w' ? 'white' : 'black';
-        if (turnColor !== state.chess.color) {
-            toast('Сейчас ход соперника');
-            return;
-        }
-
-        const clickedPiece = game.get(squareName);
-
-        if (!state.chess.selected) {
-            if (!clickedPiece || clickedPiece.color !== game.turn()) return;
-
-            state.chess.selected = squareName;
-            state.chess.legalMoves = game.moves({ square: squareName, verbose: true })
-                .map(move => move.to);
-
-            renderBoard();
-            return;
-        }
-
-        // Clicking selected piece again cancels selection.
-        if (state.chess.selected === squareName) {
-            state.chess.selected = null;
-            state.chess.legalMoves = [];
-            renderBoard();
-            return;
-        }
-
-        // Clicking another friendly piece selects it.
-        if (clickedPiece && clickedPiece.color === game.turn()) {
-            state.chess.selected = squareName;
-            state.chess.legalMoves = game.moves({ square: squareName, verbose: true })
-                .map(move => move.to);
-
-            renderBoard();
-            return;
-        }
-
-        const from = state.chess.selected;
-        const move = `${from}${squareName}`;
-
-        sendMove(move);
-    }
-
-    function sendMove(move) {
-        const socket = state.chess.ws;
-        if (!socket || socket.readyState !== WebSocket.OPEN) {
-            toast('Нет соединения');
-            return;
-        }
-
-        socket.send(JSON.stringify({
-            type: 'move',
-            move
-        }));
-
-        state.chess.selected = null;
-        state.chess.legalMoves = [];
-    }
-
-    // ---------------- CLOCKS ----------------
-
-    function formatTime(seconds) {
-        const total = Math.max(0, Math.floor(Number(seconds) || 0));
-        const minutes = Math.floor(total / 60);
-        const remaining = total % 60;
-
-        return `${String(minutes).padStart(2, '0')}:${String(remaining).padStart(2, '0')}`;
-    }
-
-    function renderClocks() {
-        const white = $('#rqWhiteClock');
-        const black = $('#rqBlackClock');
-
-        if (white) {
-            white.textContent = formatTime(state.chess.timerWhite);
-            white.classList.toggle('low', state.chess.timerWhite <= 30);
-        }
-
-        if (black) {
-            black.textContent = formatTime(state.chess.timerBlack);
-            black.classList.toggle('low', state.chess.timerBlack <= 30);
-        }
-    }
-
-    function startChessTimer() {
-        stopChessTimer();
-
-        state.chess.timerInterval = setInterval(() => {
-            if (!state.chess.started || state.chess.gameOver) return;
-
-            const game = state.chess.game;
-            if (!game) return;
-
-            if (game.turn() === 'w') {
-                state.chess.timerWhite = Math.max(0, state.chess.timerWhite - 1);
-            } else {
-                state.chess.timerBlack = Math.max(0, state.chess.timerBlack - 1);
-            }
-
-            renderClocks();
-
-            if (state.chess.timerWhite <= 0 || state.chess.timerBlack <= 0) {
-                state.chess.gameOver = true;
-                stopChessTimer();
-                setChessMessage('Время закончилось');
-            }
-        }, 1000);
-    }
-
-    function stopChessTimer() {
-        if (state.chess.timerInterval) {
-            clearInterval(state.chess.timerInterval);
-            state.chess.timerInterval = null;
-        }
-    }
-
-    // ---------------- ROOM LEAVE ----------------
-
-    function leaveRoom() {
-        disconnectSocket();
-        stopChessTimer();
-
-        state.chess.room = null;
-        state.chess.selected = null;
-        state.chess.legalMoves = [];
-        state.chess.started = false;
-        state.chess.gameOver = false;
-        state.chess.game = null;
-
-        const game = $('#rqChessGame');
-        const info = $('#rqRoomInfo');
-
-        if (game) game.style.display = 'none';
-        if (info) info.style.display = 'none';
-
-        loadChessLibrary().then(() => {
-            state.chess.game = new window.Chess();
-            renderBoard();
-        });
-
-        setChessStatus('Не в игре');
-        setChessMessage('Ожидание соперника');
-        toast('Ты покинул комнату');
-    }
-
-    // ---------------- CHESS STATUS ----------------
-
-    function setChessStatus(text, connected = false) {
-        const element = $('#rqChessStatus');
-        if (!element) return;
-
-        element.classList.toggle('connected', connected);
-        const label = element.querySelector('span:last-child');
-        if (label) label.textContent = text;
-    }
-
-    function setChessMessage(text) {
-        const element = $('#rqChessMessage');
-        if (element) element.textContent = text;
-    }
-
-    // ---------------- RATINGS ----------------
-
-    async function loadMyChessRating() {
-        const id = getTelegramId();
-        if (!id) return;
-
-        try {
-            const result = await api(`/api/player/${encodeURIComponent(id)}/rating/${state.chess.mode}`);
-            const rating = result.rating ?? result.elo ?? result.value ?? 1000;
-
-            const element = $('#rqChessElo');
-            if (element) element.textContent = rating;
-        } catch (error) {
-            console.warn('[REQUIEM] Rating load:', error);
-        }
-    }
-
-    async function loadLeaderboard() {
-        const container = $('#ratingList');
-        if (!container) return;
-
-        container.innerHTML = '<div class="rating-loading">Загрузка рейтинга...</div>';
-
-        try {
-            const result = await api(`/api/leaderboard?mode=${encodeURIComponent(state.chess.mode)}`);
-            const players = Array.isArray(result) ? result : result.players || [];
-
-            if (!players.length) {
-                container.innerHTML = '<p>Пока нет игроков в рейтинге.</p>';
-                return;
-            }
-
-            container.innerHTML = players.map((player, index) => {
-                const name = player.username || player.name || 'Игрок';
-                const rating = player.rating ?? player.elo ?? 0;
-                const avatar = player.avatar || player.photo_url || '';
-                const image = avatar
-                    ? `<img src="${escapeHTML(avatar)}" alt="" class="rq-rating-avatar">`
-                    : `<div class="rq-rating-avatar rq-rating-placeholder">${escapeHTML(name.charAt(0).toUpperCase())}</div>`;
-
-                return `
-                    <div class="rq-rating-player">
-                        <span class="rq-rating-place">${index + 1}</span>
-                        ${image}
-                        <div class="rq-rating-player-name">${escapeHTML(name)}</div>
-                        <strong>${escapeHTML(rating)}</strong>
-                    </div>
-                `;
-            }).join('');
-
-            addRatingStyles();
-        } catch (error) {
-            console.error('[REQUIEM] leaderboard:', error);
-            container.innerHTML = '<p>Не удалось загрузить рейтинг.</p>';
-        }
-    }
-
-    function addRatingStyles() {
-        if ($('#requiemRatingStyles')) return;
-
-        const style = document.createElement('style');
-        style.id = 'requiemRatingStyles';
-        style.textContent = `
-            .rq-rating-player { display:flex; align-items:center; gap:12px; padding:12px; margin-bottom:8px; border:1px solid #222; background:#111; border-radius:12px; }
-            .rq-rating-place { width:24px; font-size:13px; color:#777; }
-            .rq-rating-avatar { width:38px; height:38px; border-radius:50%; object-fit:cover; background:#292929; display:flex; align-items:center; justify-content:center; color:#eee; }
-            .rq-rating-player-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-            .rq-rating-player strong { color:#e20b25; }
-        `;
-        document.head.appendChild(style);
-    }
-
-    // ---------------- GLOBAL CLICK HANDLER ----------------
-
-    document.addEventListener('click', event => {
-        const target = event.target;
-        if (!(target instanceof Element)) return;
-
-        // Games hub: Chess button
-        const chessButton = target.closest('#openChess');
-        if (chessButton) {
-            event.preventDefault();
-            showChess();
-            return;
-        }
-
-        // Return from chess
-        const backButton = target.closest('#backToGames');
-        if (backButton) {
-            event.preventDefault();
-            showGames();
-            return;
-        }
-
-        // Main navigation buttons
-        const pageButton = target.closest('[data-page]');
-        if (pageButton && !pageButton.closest('#chessMount')) {
-            event.preventDefault();
-
-            const page = pageButton.dataset.page;
-
-            switch (page) {
-                case 'home':
-                    showHome();
-                    break;
-                case 'games':
-                    showGames();
-                    break;
-                case 'rating':
-                    showRating();
-                    break;
-                default:
-                    showSimplePage(page);
-            }
-            return;
-        }
-
-        // Settings
-        if (target.closest('#settings')) {
-            toast('Настройки скоро появятся');
-        }
-    });
-
-    // ---------------- INITIALIZATION ----------------
-
-    async function init() {
-        await registerPlayer();
-
-        // Start on home
-        showHome();
-
-        // Fetch player list for profile / rating context
-        try {
-            await api('/api/players');
-        } catch (error) {
-            console.warn('[REQUIEM] Players API:', error.message);
-        }
-
-        console.log('[REQUIEM] Frontend initialized');
-    }
-
-    init();
-});
+            <span class="profile-tag">PLAYER</span>
+        </div>
+        <div class="xp-info">
+            <span>ОПЫТ</span>
+            <small><span id="xp">0</span> / 100 XP</small>
+        </div>
+        <div class="xp-line">
+            <span class="xp-fill" id="xpFill"></span>
+        </div>
+    </section>
+
+    <section class="section-heading">
+        <div>
+            <small>ТВОИ РЕСУРСЫ</small>
+            <h2>Статистика</h2>
+        </div>
+        <span class="section-number">01</span>
+    </section>
+
+    <section class="stats">
+        <button class="stat panel" data-page="crystals">
+            <span class="red-icon">◇</span>
+            <div>
+                <small>КРИСТАЛЛЫ</small>
+                <strong id="crystals">0</strong>
+            </div>
+            <span class="chevron">↗</span>
+        </button>
+
+        <button class="stat panel" data-page="bonus">
+            <span class="red-icon">✦</span>
+            <div>
+                <small>НАГРАДА</small>
+                <strong class="stat-label">Бонус</strong>
+            </div>
+            <span class="chevron">↗</span>
+        </button>
+    </section>
+
+    <section class="section-heading">
+        <div>
+            <small>ВЫБИРАЙ СВОЙ ПУТЬ</small>
+            <h2>Разделы</h2>
+        </div>
+        <span class="section-number">02</span>
+    </section>
+
+    <section class="menu">
+        <button class="menu-item panel" data-page="collection">
+            <span class="menu-icon">▦</span>
+            <span class="menu-content">
+                <strong>Коллекция</strong>
+                <small>Твои предметы и достижения</small>
+            </span>
+            <span class="chevron">↗</span>
+        </button>
+
+        <button class="menu-item panel" data-page="games">
+            <span class="menu-icon">♧</span>
+            <span class="menu-content">
+                <strong>Игры</strong>
+                <small>Испытай свои способности</small>
+            </span>
+            <span class="chevron">↗</span>
+        </button>
+
+        <button class="menu-item panel" data-page="rating">
+            <span class="menu-icon">♜</span>
+            <span class="menu-content">
+                <strong>Рейтинг</strong>
+                <small>Сравни результаты игроков</small>
+            </span>
+            <span class="chevron">↗</span>
+        </button>
+
+        <button class="menu-item panel" data-page="tasks">
+            <span class="menu-icon">☑</span>
+            <span class="menu-content">
+                <strong>Задания</strong>
+                <small>Выполняй и получай награды</small>
+            </span>
+            <span class="chevron">↗</span>
+        </button>
+
+        <button class="menu-item panel" data-page="profile">
+            <span class="menu-icon">♟</span>
+            <span class="menu-content">
+                <strong>Профиль</strong>
+                <small>Твоя статистика и настройки</small>
+            </span>
+            <span class="chevron">↗</span>
+        </button>
+    </section>
+
+    <!-- GAMES HUB -->
+
+    <section id="gamesHub" style="display:none">
+
+        <div class="section-heading">
+            <div>
+                <small>ВЫБИРАЙ РЕЖИМ</small>
+                <h2>Игровая арена</h2>
+            </div>
+            <span class="section-number">03</span>
+        </div>
+
+        <button class="menu-item panel" id="openChess">
+            <span class="menu-icon">♟</span>
+            <span class="menu-content">
+                <strong>Шахматы</strong>
+                <small>Онлайн-партии · ELO · Комнаты</small>
+            </span>
+            <span class="chevron">↗</span>
+        </button>
+
+        <div class="panel" style="
+            margin-top:12px;
+            padding:20px;
+            border-radius:14px;
+            opacity:.65;
+        ">
+            <div style="font-size:28px;color:#e20b25">＋</div>
+            <strong>Новые игры</strong>
+            <p style="font-size:12px;color:#888">
+                Другие игровые режимы появятся здесь.
+            </p>
+        </div>
+
+    </section>
+
+    <!-- CHESS SCREEN MOUNT -->
+
+    <section id="chessScreen" style="display:none">
+        <button class="menu-item panel" id="backToGames"
+            style="margin-bottom:14px">
+            <span class="menu-icon">←</span>
+            <span class="menu-content">
+                <strong>Назад к играм</strong>
+                <small>Вернуться в игровую арену</small>
+            </span>
+        </button>
+
+        <div id="chessMount"></div>
+    </section>
+
+    <section class="rating-section" id="ratingSection" style="display:none">
+        <h2>🏆 Рейтинг игроков</h2>
+        <div id="ratingList"></div>
+    </section>
+
+    <nav class="bottom-nav panel" aria-label="Навигация">
+        <button class="nav-item active" data-page="home">
+            <span>⌂</span>
+            <small>Главная</small>
+        </button>
+        <button class="nav-item" data-page="collection">
+            <span>▣</span>
+            <small>Коллекция</small>
+        </button>
+        <button class="nav-item" data-page="games">
+            <span>♧</span>
+            <small>Игры</small>
+        </button>
+        <button class="nav-item" data-page="rating">
+            <span>♜</span>
+            <small>Рейтинг</small>
+        </button>
+        <button class="nav-item" data-page="profile">
+            <span>♟</span>
+            <small>Профиль</small>
+        </button>
+    </nav>
+
+</main>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
