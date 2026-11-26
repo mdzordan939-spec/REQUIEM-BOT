@@ -216,3 +216,261 @@ async def register(request: Request):
         "success": True,
         "player_id": user["id"]
     }
+
+# ONLINE CHESS
+
+chess_rooms = {}
+
+
+def get_chess_state(room):
+    return {
+        "fen": room["board"].fen(),
+        "turn": "white" if room["board"].turn else "black",
+        "players": {
+            "white": room["players"]["white"],
+            "black": room["players"]["black"]
+        },
+        "game_over": room["board"].is_game_over(
+            claim_draw=True
+        ),
+        "result": room["board"].result(
+            claim_draw=True
+        )
+    }
+
+
+async def broadcast_chess(room):
+    state = get_chess_state(room)
+
+    for socket in list(room["sockets"].values()):
+        if socket:
+            try:
+                await socket.send_json(state)
+            except Exception:
+                pass
+
+
+@app.post("/api/chess/create")
+async def create_chess_room(request: Request):
+    body = await request.json()
+    user = verify_telegram_data(body.get("initData", ""))
+
+    room_id = uuid.uuid4().hex[:6].upper()
+
+    chess_rooms[room_id] = {
+        "board": chess.Board(),
+        "players": {
+            "white": user["id"],
+            "black": None
+        },
+        "sockets": {
+            "white": None,
+            "black": None
+        },
+        "finished": False,
+        "lock": asyncio.Lock()
+    }
+
+    return {
+        "success": True,
+        "room_id": room_id,
+        "color": "white"
+    }
+
+
+@app.websocket("/ws/chess/{room_id}")
+async def chess_websocket(
+    websocket: WebSocket,
+    room_id: str,
+    initData: str
+):
+    room = chess_rooms.get(room_id)
+
+    if not room:
+        await websocket.close(code=1008)
+        return
+
+    try:
+        user = verify_telegram_data(initData)
+    except HTTPException:
+        await websocket.close(code=1008)
+        return
+
+    player_id = user["id"]
+
+    async with room["lock"]:
+        if room["players"]["white"] == player_id:
+            color = "white"
+        elif room["players"]["black"] == player_id:
+            color = "black"
+        elif room["players"]["black"] is None:
+            room["players"]["black"] = player_id
+            color = "black"
+        else:
+            await websocket.close(code=1008)
+            return
+
+        room["sockets"][color] = websocket
+
+    await websocket.accept()
+
+    await websocket.send_json({
+        "type": "connected",
+        "color": color,
+        **get_chess_state(room)
+    })
+
+    await broadcast_chess(room)
+
+    try:
+        while True:
+            data = await websocket.receive_json()
+
+            if data.get("type") != "move":
+                continue
+
+            async with room["lock"]:
+                if room["finished"]:
+                    continue
+
+                board = room["board"]
+
+                correct_turn = (
+                    board.turn == (color == "white")
+                )
+
+                if not correct_turn:
+                    await websocket.send_json({
+                        "error": "Not your turn"
+                    })
+                    continue
+
+                try:
+                    move = chess.Move.from_uci(
+                        data.get("move", "")
+                    )
+                except ValueError:
+                    await websocket.send_json({
+                        "error": "Invalid move"
+                    })
+                    continue
+
+                if move not in board.legal_moves:
+                    await websocket.send_json({
+                        "error": "Illegal move"
+                    })
+                    continue
+
+                board.push(move)
+
+                if board.is_game_over(claim_draw=True):
+                    room["finished"] = True
+
+                    result = board.result(claim_draw=True)
+
+                    white_id = room["players"]["white"]
+                    black_id = room["players"]["black"]
+
+                    if black_id is not None:
+                        with sqlite3.connect(DB_PATH) as db:
+                            white_row = db.execute(
+                                "SELECT elo FROM players WHERE id = ?",
+                                (white_id,)
+                            ).fetchone()
+
+                            black_row = db.execute(
+                                "SELECT elo FROM players WHERE id = ?",
+                                (black_id,)
+                            ).fetchone()
+
+                            if white_row and black_row:
+                                white_elo = white_row[0]
+                                black_elo = black_row[0]
+
+                                expected_white = 1 / (
+                                    1 + 10 ** (
+                                        (black_elo - white_elo) / 400
+                                    )
+                                )
+
+                                expected_black = 1 - expected_white
+
+                                if result == "1-0":
+                                    score_white = 1
+                                    score_black = 0
+                                elif result == "0-1":
+                                    score_white = 0
+                                    score_black = 1
+                                else:
+                                    score_white = 0.5
+                                    score_black = 0.5
+
+                                new_white = max(
+                                    100,
+                                    round(
+                                        white_elo + 32 * (
+                                            score_white - expected_white
+                                        )
+                                    )
+                                )
+
+                                new_black = max(
+                                    100,
+                                    round(
+                                        black_elo + 32 * (
+                                            score_black - expected_black
+                                        )
+                                    )
+                                )
+
+                                white_stats = (
+                                    1 if result == "1-0" else 0,
+                                    1 if result == "0-1" else 0,
+                                    1 if result == "1/2-1/2" else 0
+                                )
+
+                                black_stats = (
+                                    1 if result == "0-1" else 0,
+                                    1 if result == "1-0" else 0,
+                                    1 if result == "1/2-1/2" else 0
+                                )
+
+                                db.execute("""
+                                    UPDATE players
+                                    SET elo = ?,
+                                        wins = wins + ?,
+                                        losses = losses + ?,
+                                        draws = draws + ?,
+                                        games_played = games_played + 1
+                                    WHERE id = ?
+                                """, (
+                                    new_white,
+                                    *white_stats,
+                                    white_id
+                                ))
+
+                                db.execute("""
+                                    UPDATE players
+                                    SET elo = ?,
+                                        wins = wins + ?,
+                                        losses = losses + ?,
+                                        draws = draws + ?,
+                                        games_played = games_played + 1
+                                    WHERE id = ?
+                                """, (
+                                    new_black,
+                                    *black_stats,
+                                    black_id
+                                ))
+
+            await broadcast_chess(room)
+
+    except WebSocketDisconnect:
+        async with room["lock"]:
+            if room["sockets"].get(color) == websocket:
+                room["sockets"][color] = None
+
+    except Exception:
+        async with room["lock"]:
+            if room["sockets"].get(color) == websocket:
+                room["sockets"][color] = None
