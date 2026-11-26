@@ -1,15 +1,20 @@
-```css
+
+/* =====================================
+   REQUIEM — MAIN DESIGN
+   ===================================== */
+
 * {
     box-sizing: border-box;
 }
 
 :root {
-    --bg: #080808;
-    --card: #141414;
-    --border: #242424;
+    --bg: #050505;
+    --card: #111111;
+    --border: #292929;
     --red: #e20b25;
+    --red-light: #ff3158;
     --text: #f1f1f1;
-    --muted: #8a8a8a;
+    --muted: #898989;
 }
 
 html,
@@ -18,7 +23,8 @@ body {
     min-height: 100%;
     background: var(--bg);
     color: var(--text);
-    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: Inter, system-ui, -apple-system,
+        BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 body {
@@ -34,7 +40,9 @@ button {
     pointer-events: auto;
 }
 
-/* ФОН */
+/* =====================================
+   ANIMATED BACKGROUND
+   ===================================== */
 
 .ambient {
     position: fixed;
@@ -42,115 +50,246 @@ button {
     overflow: hidden;
     pointer-events: none;
     z-index: 0;
-    background: radial-gradient(
-        ellipse at 50% 35%,
-        #100909 0%,
-        #080808 55%,
-        #050505 100%
-    );
+
+    background:
+        radial-gradient(
+            ellipse at 75% 30%,
+            rgba(125, 0, 30, .25),
+            transparent 48%
+        ),
+        radial-gradient(
+            ellipse at 15% 80%,
+            rgba(100, 0, 25, .18),
+            transparent 45%
+        ),
+        #050505;
 }
+
+/* Красное атмосферное свечение */
+
+.ambient::before {
+    content: "";
+    position: absolute;
+    inset: -25%;
+
+    background:
+        radial-gradient(
+            ellipse at 70% 30%,
+            rgba(210, 0, 45, .22),
+            transparent 38%
+        ),
+        radial-gradient(
+            ellipse at 20% 75%,
+            rgba(140, 0, 35, .2),
+            transparent 42%
+        );
+
+    animation: crimsonPulse 7s ease-in-out infinite alternate;
+}
+
+.ambient::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+
+    background: linear-gradient(
+        115deg,
+        transparent 35%,
+        rgba(255, 0, 45, .045) 50%,
+        transparent 65%
+    );
+
+    animation: lightSweep 9s ease-in-out infinite;
+}
+
+@keyframes crimsonPulse {
+    from {
+        transform: scale(.9);
+        opacity: .4;
+    }
+
+    to {
+        transform: scale(1.15);
+        opacity: 1;
+    }
+}
+
+@keyframes lightSweep {
+    0%, 100% {
+        transform: translateX(-18%);
+        opacity: .2;
+    }
+
+    50% {
+        transform: translateX(18%);
+        opacity: .85;
+    }
+}
+
+/* =====================================
+   KATANA SLASHES
+   ===================================== */
 
 .slash {
     position: absolute;
     display: block;
-    height: 1px;
+    height: 2px;
+    border-radius: 50%;
+
     background: linear-gradient(
         90deg,
         transparent,
-        rgba(226, 11, 37, .45),
+        rgba(255, 20, 55, .2),
+        #ff2348,
+        #ffd0dc,
+        #ff2348,
         transparent
     );
+
+    box-shadow:
+        0 0 8px #ff123b,
+        0 0 22px rgba(255, 0, 45, .8),
+        0 0 50px rgba(255, 0, 45, .4);
+
+    opacity: 0;
     transform: rotate(-32deg);
-    animation: drift 15s linear infinite;
+
+    animation: katanaSlash 6s ease-in-out infinite;
 }
 
 .slash-a {
-    width: 55vw;
-    top: 22%;
-    left: -15%;
+    width: 110vw;
+    top: 24%;
+    left: -120%;
 }
 
 .slash-b {
-    width: 70vw;
-    top: 68%;
-    right: -25%;
-    animation-delay: -7s;
+    width: 85vw;
+    top: 53%;
+    left: -110%;
+    animation-delay: 2s;
 }
 
 .slash-c {
-    width: 40vw;
-    top: 90%;
-    left: 35%;
-    animation-delay: -3s;
+    width: 95vw;
+    top: 78%;
+    left: -110%;
+    animation-delay: 4s;
 }
+
+@keyframes katanaSlash {
+    0%, 12% {
+        transform: translateX(-10vw) rotate(-32deg);
+        opacity: 0;
+    }
+
+    18% {
+        opacity: 1;
+    }
+
+    38% {
+        transform: translateX(230vw) rotate(-32deg);
+        opacity: .8;
+    }
+
+    42%, 100% {
+        opacity: 0;
+    }
+}
+
+/* =====================================
+   SAKURA PETALS
+   ===================================== */
 
 .square {
     position: absolute;
-    width: 5px;
-    height: 5px;
-    background: rgba(226, 11, 37, .5);
-    transform: rotate(45deg);
-    animation: float 9s ease-in-out infinite;
+    width: 9px;
+    height: 13px;
+
+    border-radius: 85% 0 85% 0;
+
+    background: linear-gradient(
+        135deg,
+        #ffd0dc,
+        #ff5279 45%,
+        #a60029
+    );
+
+    box-shadow:
+        0 0 7px rgba(255, 65, 110, .7),
+        0 0 17px rgba(255, 0, 55, .25);
+
+    animation: sakuraFall 10s linear infinite;
 }
 
 .square-a {
-    top: 16%;
-    left: 22%;
+    top: -10%;
+    left: 18%;
 }
 
 .square-b {
-    top: 53%;
-    right: 15%;
-    animation-delay: -4s;
+    top: -20%;
+    left: 53%;
+    animation-delay: -3.5s;
 }
 
 .square-c {
-    bottom: 17%;
-    left: 12%;
-    animation-delay: -6s;
+    top: -15%;
+    left: 85%;
+    animation-delay: -7s;
 }
 
-@keyframes drift {
+@keyframes sakuraFall {
     0% {
-        transform: translateX(-8vw) rotate(-32deg);
-        opacity: .15;
+        transform: translate3d(0, -10vh, 0) rotate(0deg);
+        opacity: 0;
     }
-    50% {
-        opacity: .45;
+
+    12% {
+        opacity: .9;
     }
+
+    35% {
+        transform: translate3d(13vw, 35vh, 0) rotate(180deg);
+    }
+
+    65% {
+        transform: translate3d(-9vw, 70vh, 0) rotate(420deg);
+        opacity: .8;
+    }
+
     100% {
-        transform: translateX(8vw) rotate(-32deg);
-        opacity: .15;
+        transform: translate3d(15vw, 115vh, 0) rotate(720deg);
+        opacity: 0;
     }
 }
 
-@keyframes float {
-    0%, 100% {
-        transform: translateY(0) rotate(45deg);
-        opacity: .15;
-    }
-    50% {
-        transform: translateY(-24px) rotate(45deg);
-        opacity: .65;
-    }
-}
-
-/* ОСНОВНОЙ ЭКРАН */
+/* =====================================
+   MAIN SCREEN
+   ===================================== */
 
 .app {
     position: relative;
     z-index: 1;
+
     max-width: 520px;
     margin: 0 auto;
-    padding: calc(env(safe-area-inset-top) + 22px) 18px calc(env(safe-area-inset-bottom) + 110px);
+
+    padding:
+        calc(env(safe-area-inset-top) + 22px)
+        18px
+        calc(env(safe-area-inset-bottom) + 110px);
 }
 
-/* ШАПКА */
+/* =====================================
+   HEADER
+   ===================================== */
 
 .header {
     display: flex;
     align-items: center;
     justify-content: space-between;
+
     margin: 20px 4px 34px;
 }
 
@@ -163,10 +302,13 @@ button {
 .brand-mark {
     width: 44px;
     height: 44px;
+
     border: 1px solid #252525;
     border-radius: 50%;
+
     display: grid;
     place-items: center;
+
     color: var(--red);
     font-size: 28px;
     font-weight: 900;
@@ -187,25 +329,35 @@ button {
 .icon-btn {
     width: 46px;
     height: 46px;
+
     border-radius: 16px;
     border: 1px solid var(--border);
+
     background: #151515;
     color: #aaa;
+
     font-size: 20px;
 }
 
-/* КАРТОЧКИ */
+/* =====================================
+   PANELS
+   ===================================== */
 
 .panel {
-    background: linear-gradient(145deg, #171717, #111);
-    border: 1px solid #242424;
+    background: #141414;
+    border: 1px solid #292929;
     border-radius: 22px;
 }
+
+/* =====================================
+   PROFILE
+   ===================================== */
 
 .profile {
     display: flex;
     align-items: center;
     gap: 18px;
+
     padding: 20px;
     margin-bottom: 18px;
 }
@@ -214,11 +366,15 @@ button {
     width: 94px;
     height: 94px;
     flex: 0 0 94px;
+
     border-radius: 50%;
     border: 1px solid #292929;
+
     background: #090909;
+
     display: grid;
     place-items: center;
+
     color: var(--red);
     font-size: 48px;
     font-weight: 800;
@@ -254,6 +410,7 @@ button {
     display: block;
     width: 0;
     height: 100%;
+
     background: var(--red);
     border-radius: 9px;
 }
@@ -263,7 +420,9 @@ button {
     font-size: 12px;
 }
 
-/* СТАТИСТИКА */
+/* =====================================
+   STATISTICS
+   ===================================== */
 
 .stats {
     display: grid;
@@ -276,8 +435,10 @@ button {
     display: flex;
     align-items: center;
     gap: 13px;
+
     padding: 18px 14px;
     min-height: 94px;
+
     text-align: left;
     border-radius: 20px;
 }
@@ -285,6 +446,7 @@ button {
 .red-icon {
     font-size: 30px;
     color: var(--red);
+
     width: 36px;
     text-align: center;
 }
@@ -312,7 +474,9 @@ button {
     font-weight: 300;
 }
 
-/* МЕНЮ */
+/* =====================================
+   MENU
+   ===================================== */
 
 .menu {
     display: grid;
@@ -321,10 +485,13 @@ button {
 
 .menu-item {
     height: 74px;
+
     display: flex;
     align-items: center;
     gap: 18px;
+
     padding: 0 20px;
+
     text-align: left;
     border-radius: 20px;
     width: 100%;
@@ -341,13 +508,17 @@ button {
     font-size: 16px;
 }
 
-/* РЕЙТИНГ */
+/* =====================================
+   RATING
+   ===================================== */
 
 .rating-section {
     position: relative;
     z-index: 2;
+
     margin-top: 24px;
     padding: 20px;
+
     background: #111;
     border: 1px solid var(--border);
     border-radius: 22px;
@@ -362,6 +533,7 @@ button {
     display: flex;
     align-items: center;
     gap: 13px;
+
     padding: 13px 0;
     border-bottom: 1px solid #292929;
 }
@@ -376,6 +548,7 @@ button {
 .rating-avatar {
     width: 42px;
     height: 42px;
+
     border-radius: 50%;
     object-fit: cover;
     background: #222;
@@ -397,35 +570,49 @@ button {
     font-size: 12px;
 }
 
-/* НИЖНЯЯ НАВИГАЦИЯ */
+/* =====================================
+   BOTTOM NAVIGATION
+   ===================================== */
 
 .bottom-nav {
     position: fixed;
     z-index: 100;
+
     bottom: calc(env(safe-area-inset-bottom) + 12px);
     left: 50%;
     transform: translateX(-50%);
+
     width: min(calc(100% - 20px), 500px);
+
     display: flex;
     justify-content: space-around;
+
     padding: 10px 5px 8px;
-    background: rgba(15, 15, 15, .96);
+
+    background: rgba(15, 15, 15, .97);
     backdrop-filter: blur(12px);
+
+    border: 1px solid #252525;
     border-radius: 24px;
+
     pointer-events: auto;
 }
 
 .nav-item {
     position: relative;
     z-index: 101;
+
     border: 0;
     background: transparent;
+
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 4px;
+
     min-width: 0;
     flex: 1;
+
     color: #707070;
     padding: 3px 0 2px;
 }
@@ -448,22 +635,30 @@ button {
     font-size: 25px;
 }
 
-/* УВЕДОМЛЕНИЯ */
+/* =====================================
+   TOAST NOTIFICATIONS
+   ===================================== */
 
 .toast {
     position: fixed;
     z-index: 110;
+
     bottom: 110px;
     left: 50%;
+
     transform: translate(-50%, 12px);
     opacity: 0;
     pointer-events: none;
+
     background: #202020;
     border: 1px solid #343434;
     border-radius: 12px;
+
     padding: 10px 15px;
+
     color: #eee;
     font-size: 13px;
+
     transition: .2s;
 }
 
@@ -472,7 +667,9 @@ button {
     transform: translate(-50%, 0);
 }
 
-/* АДАПТАЦИЯ */
+/* =====================================
+   RESPONSIVE
+   ===================================== */
 
 @media (min-width: 480px) {
     .app {
@@ -492,4 +689,40 @@ button {
         height: 80px;
     }
 }
-```
+
+@media (max-width: 360px) {
+    .app {
+        padding-left: 13px;
+        padding-right: 13px;
+    }
+
+    .avatar {
+        width: 76px;
+        height: 76px;
+        flex-basis: 76px;
+    }
+
+    .profile-info h1 {
+        font-size: 20px;
+    }
+
+    .stat {
+        padding: 14px 10px;
+    }
+
+    .stat strong {
+        font-size: 19px;
+    }
+}
+
+/* =====================================
+   REDUCED MOTION
+   ===================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    .ambient *,
+    .ambient::before,
+    .ambient::after {
+        animation: none !important;
+    }
+}
