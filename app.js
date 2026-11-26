@@ -104,11 +104,11 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadPlayers() {
         try {
             const response = await fetch(
-                `${API_URL}/api/players`
-            );
+    API_URL + '/api/players'
+);
 
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+               throw new Error('HTTP ' + response.status);
             }
 
             const data = await response.json();
