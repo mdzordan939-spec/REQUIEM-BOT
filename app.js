@@ -1,76 +1,190 @@
-const tg=window.Telegram?.WebApp;if(tg){tg.ready();tg.expand();tg.setHeaderColor?.('#080808');tg.setBackgroundColor?.('#080808')}const user=tg?.initDataUnsafe?.user;if(user?.first_name)document.getElementById('username').textContent=[user.first_name,user.last_name].filter(Boolean).join(' ');const toast=document.getElementById('toast');let toastTimer;function showToast(text){toast.textContent=text;toast.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('show'),1800)}const labels={home:'Главная',collection:'Коллекция',games:'Игры',rating:'Рейтинг',tasks:'Задания',profile:'Профиль',crystals:'Кристаллы',bonus:'Ежедневный бонус'};document.querySelectorAll('[data-page]').forEach(el => {
-    el.addEventListener('click', () => {
-        const page = el.dataset.page;
+```javascript
+const tg = window.Telegram?.WebApp;
 
-        document.querySelectorAll('.nav-item').forEach(n =>
-            n.classList.toggle('active', n.dataset.page === page)
-        );
+if (tg) {
+    tg.ready();
+    tg.expand();
+    tg.setHeaderColor?.('#080808');
+    tg.setBackgroundColor?.('#080808');
+}
 
-        if (page === 'rating') {
-            const ratingSection = document.getElementById('ratingSection');
-            ratingSection.style.display = 'block';
-            ratingSection.scrollIntoView({ behavior: 'smooth' });
-        } else {
-            const ratingSection = document.getElementById('ratingSection');
-            if (ratingSection) ratingSection.style.display = 'none';
-            showToast(labels[page] || page);
-        }
+const user = tg?.initDataUnsafe?.user;
 
-        if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
-    });
-});;document.getElementById('settings').addEventListener('click',()=>showToast('Настройки — добавим следующим этапом'));
-const API_URL = "https://requiem-bot-7eyu.onrender.com";
-async function loadPlayers() {
-    try {
-        const response = await fetch(`${API_URL}/api/players`);
-        const data = await response.json();
-
-       console.log("REQUIEM PLAYERS:", data.players);
-
-const ratingList = document.getElementById("ratingList");
-
-if (ratingList) {
-    ratingList.innerHTML = "";
-
-    data.players.forEach((player, index) => {
-        const card = document.createElement("div");
-        card.className = "rating-player";
-
-        const name = [player.first_name, player.last_name]
+if (user?.first_name) {
+    const usernameEl = document.getElementById('username');
+    if (usernameEl) {
+        usernameEl.textContent = [user.first_name, user.last_name]
             .filter(Boolean)
-            .join(" ") || player.username || "Игрок";
-
-        card.innerHTML = `
-            <div class="rating-place">${index + 1}</div>
-            <img class="rating-avatar" src="${player.photo_url || ""}" onerror="this.style.display='none'">
-            <div class="rating-info">
-                <strong>${name}</strong>
-                <small>${player.username ? "@" + player.username : "Игрок REQUIEM"}</small>
-            </div>
-        `;
-
-        ratingList.appendChild(card);
-    });
-    } catch (error) {
-        console.error("REQUIEM API ERROR:", error);
+            .join(' ');
     }
 }
 
+const toast = document.getElementById('toast');
+let toastTimer;
+
+function showToast(text) {
+    if (!toast) return;
+
+    toast.textContent = text;
+    toast.classList.add('show');
+
+    clearTimeout(toastTimer);
+
+    toastTimer = setTimeout(() => {
+        toast.classList.remove('show');
+    }, 1800);
+}
+
+const labels = {
+    home: 'Главная',
+    collection: 'Коллекция',
+    games: 'Игры',
+    rating: 'Рейтинг',
+    tasks: 'Задания',
+    profile: 'Профиль',
+    crystals: 'Кристаллы',
+    bonus: 'Ежедневный бонус'
+};
+
+// НАВИГАЦИЯ
+
+document.querySelectorAll('[data-page]').forEach(el => {
+    el.addEventListener('click', () => {
+        const page = el.dataset.page;
+
+        document.querySelectorAll('.nav-item').forEach(n => {
+            n.classList.toggle('active', n.dataset.page === page);
+        });
+
+        const ratingSection = document.getElementById('ratingSection');
+
+        if (ratingSection) {
+            ratingSection.style.display =
+                page === 'rating' ? 'block' : 'none';
+        }
+
+        if (page === 'rating' && ratingSection) {
+            ratingSection.scrollIntoView({
+                behavior: 'smooth',
+            });
+        } else {
+            showToast(labels[page] || page);
+        }
+
+        if (tg?.HapticFeedback) {
+            tg.HapticFeedback.selectionChanged();
+        }
+    });
+});
+
+// НАСТРОЙКИ
+
+const settingsButton = document.getElementById('settings');
+
+if (settingsButton) {
+    settingsButton.addEventListener('click', () => {
+        showToast('Настройки — добавим следующим этапом');
+    });
+}
+
+// API
+
+const API_URL = 'https://requiem-bot-7eyu.onrender.com';
+
+// ЗАГРУЗКА РЕЙТИНГА
+
+async function loadPlayers() {
+    try {
+        const response = await fetch(`${API_URL}/api/players`);
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        console.log('REQUIEM PLAYERS:', data.players);
+
+        const ratingList = document.getElementById('ratingList');
+
+        if (!ratingList) return;
+
+        ratingList.innerHTML = '';
+
+        const players = Array.isArray(data.players)
+            ? data.players
+            : [];
+
+        players.forEach((player, index) => {
+            const card = document.createElement('div');
+            card.className = 'rating-player';
+
+            const name = [
+                player.first_name,
+                player.last_name
+            ].filter(Boolean).join(' ')
+                || player.username
+                || 'Игрок';
+
+            const place = document.createElement('div');
+            place.className = 'rating-place';
+            place.textContent = index + 1;
+
+            const avatar = document.createElement('img');
+            avatar.className = 'rating-avatar';
+            avatar.src = player.photo_url || '';
+            avatar.onerror = () => {
+                avatar.style.display = 'none';
+            };
+
+            const info = document.createElement('div');
+            info.className = 'rating-info';
+
+            const playerName = document.createElement('strong');
+            playerName.textContent = name;
+
+            const playerUsername = document.createElement('small');
+            playerUsername.textContent = player.username
+                ? '@' + player.username
+                : 'Игрок REQUIEM';
+
+            info.appendChild(playerName);
+            info.appendChild(playerUsername);
+
+            card.appendChild(place);
+            card.appendChild(avatar);
+            card.appendChild(info);
+
+            ratingList.appendChild(card);
+        });
+
+        if (players.length === 0) {
+            ratingList.textContent = 'Пока игроков нет';
+        }
+
+    } catch (error) {
+        console.error('REQUIEM API ERROR:', error);
+    }
+}
+
+// РЕГИСТРАЦИЯ ИГРОКА
+
 async function registerPlayer() {
     if (!tg?.initData) {
-        console.warn("Открой REQUIEM через Telegram");
+        console.warn('Открой REQUIEM через Telegram');
+        await loadPlayers();
         return;
     }
 
     try {
         const response = await fetch(`${API_URL}/api/register`, {
-            method: "POST",
+            method: 'POST',
             headers: {
-                "Content-Type": "application/json"
+                'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                initData: tg.initData
-            })
+                initData: tg.initData,
+            }),
         });
 
         if (!response.ok) {
@@ -78,14 +192,18 @@ async function registerPlayer() {
         }
 
         const result = await response.json();
-        console.log("REQUIEM REGISTRATION:", result);
+
+        console.log('REQUIEM REGISTRATION:', result);
 
         await loadPlayers();
+
     } catch (error) {
-        console.error("REGISTRATION ERROR:", error);
+        console.error('REGISTRATION ERROR:', error);
+        await loadPlayers();
     }
 }
 
-registerPlayer();
+// ЗАПУСК
 
-loadPlayers();
+registerPlayer();
+```
