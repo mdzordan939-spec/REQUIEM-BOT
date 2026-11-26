@@ -5,3 +5,24 @@
 <section class="stats"><button class="stat panel" data-page="crystals"><span class="red-icon">◇</span><div><strong id="crystals">0</strong><small>Кристаллы</small></div><span class="chevron">›</span></button><button class="stat panel" data-page="bonus"><span class="red-icon">♙</span><div><strong class="stat-label">Ежедневный</strong><small>бонус</small></div><span class="chevron">›</span></button></section>
 <section class="menu"><button class="menu-item panel" data-page="collection"><span class="menu-icon">▦</span><span>Коллекция</span><span class="chevron">›</span></button><button class="menu-item panel" data-page="games"><span class="menu-icon">♧</span><span>Игры</span><span class="chevron">›</span></button><button class="menu-item panel" data-page="rating"><span class="menu-icon">♜</span><span>Рейтинг</span><span class="chevron">›</span></button><button class="menu-item panel" data-page="tasks"><span class="menu-icon">☑</span><span>Задания</span><span class="chevron">›</span></button><button class="menu-item panel" data-page="profile"><span class="menu-icon">♟</span><span>Профиль</span><span class="chevron">›</span></button></section>
 <nav class="bottom-nav panel" aria-label="Навигация"><button class="nav-item active" data-page="home"><span>⌂</span><small>Главная</small></button><button class="nav-item" data-page="collection"><span>▣</span><small>Коллекция</small></button><button class="nav-item" data-page="games"><span>♧</span><small>Игры</small></button><button class="nav-item" data-page="rating"><span>♜</span><small>Рейтинг</small></button><button class="nav-item" data-page="profile"><span>♟</span><small>Профиль</small></button></nav></main><div class="toast" id="toast" role="status"></div><script src="app.js"></script></body></html>
+
+
+const API_URL = "https://requiem-bot-7eyu.onrender.com";
+
+async function loadPlayers() {
+    try {
+        const response = await fetch(`${API_URL}/api/players`);
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        console.log("REQUIEM PLAYERS:", data.players);
+    } catch (error) {
+        console.error("REQUIEM API ERROR:", error);
+    }
+}
+
+loadPlayers();
