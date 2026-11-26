@@ -51,31 +51,6 @@ if (ratingList) {
 
         ratingList.appendChild(card);
     });
-}
-const ratingList = document.getElementById("ratingList");
-
-if (ratingList) {
-    ratingList.innerHTML = "";
-
-    data.players.forEach((player, index) => {
-        const card = document.createElement("div");
-        card.className = "rating-player";
-
-        const name = [player.first_name, player.last_name]
-            .filter(Boolean)
-            .join(" ") || player.username || "Игрок";
-
-        card.innerHTML = `
-            <div class="rating-place">${index + 1}</div>
-            <img class="rating-avatar" src="${player.photo_url || ""}" onerror="this.style.display='none'">
-            <div class="rating-info">
-                <strong>${name}</strong>
-                <small>${player.username ? "@" + player.username : "Игрок REQUIEM"}</small>
-            </div>
-        `;
-
-        ratingList.appendChild(card);
-    });
     } catch (error) {
         console.error("REQUIEM API ERROR:", error);
     }
