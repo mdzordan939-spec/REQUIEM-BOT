@@ -23,22 +23,70 @@ document.addEventListener('DOMContentLoaded', () => {
     const usernameElement = document.getElementById('username');
     if (usernameElement) usernameElement.textContent = username;
 
+    const initData = () => tg?.initData || '';
+
+    // ==========================================
+    // TOAST
+    // ==========================================
+
     const toast = document.getElementById('toast');
     let toastTimer;
 
     function showToast(message) {
-        if (!toast) return;
+        if (!toast) {
+            console.log(message);
+            return;
+        }
 
         toast.textContent = message;
         toast.classList.add('show');
 
         clearTimeout(toastTimer);
+
         toastTimer = setTimeout(() => {
             toast.classList.remove('show');
         }, 2400);
     }
 
-    const initData = () => tg?.initData || '';
+    // ==========================================
+    // CHESS ENGINE
+    // ==========================================
+
+    let chessEnginePromise = null;
+
+    function loadChessEngine() {
+        if (window.Chess) return Promise.resolve(true);
+
+        if (chessEnginePromise) return chessEnginePromise;
+
+        chessEnginePromise = new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+
+            script.src =
+                'https://cdn.jsdelivr.net/npm/chess.js@0.10.3/chess.min.js';
+
+            script.onload = () => {
+                if (typeof window.Chess === 'function') {
+                    resolve(true);
+                } else {
+                    reject(new Error('Chess.js не загрузилась'));
+                }
+            };
+
+            script.onerror = () => {
+                reject(new Error('Не удалось загрузить Chess.js'));
+            };
+
+            document.head.appendChild(script);
+        });
+
+        return chessEnginePromise;
+    }
+
+    loadChessEngine().catch(error => {
+        console.error(error);
+        showToast('Не загрузился расчёт шахматных ходов');
+    });
 
     // ==========================================
     // NAVIGATION
@@ -53,7 +101,9 @@ document.addEventListener('DOMContentLoaded', () => {
         ...document.querySelectorAll('.profile'),
         ...document.querySelectorAll('.stats'),
         ...document.querySelectorAll('.menu'),
-        ...Array.from(document.querySelectorAll('.section-heading')).slice(0, 2)
+        ...Array.from(
+            document.querySelectorAll('.section-heading')
+        ).slice(0, 2)
     ];
 
     function hideSections() {
@@ -73,7 +123,10 @@ document.addEventListener('DOMContentLoaded', () => {
         hideSections();
 
         document.querySelectorAll('.nav-item').forEach(button => {
-            button.classList.toggle('active', button.dataset.page === page);
+            button.classList.toggle(
+                'active',
+                button.dataset.page === page
+            );
         });
 
         if (page === 'home') {
@@ -109,14 +162,20 @@ document.addEventListener('DOMContentLoaded', () => {
             padding:14px;
             color:#fff;
             background:
-                radial-gradient(ellipse at 50% 0%,rgba(180,0,35,.18),transparent 60%),
+                radial-gradient(
+                    ellipse at 50% 0%,
+                    rgba(180,0,35,.18),
+                    transparent 60%
+                ),
                 #080808;
             border:1px solid #40121d;
             border-radius:18px;
             box-sizing:border-box;
         }
 
-        #chessPanel * { box-sizing:border-box; }
+        #chessPanel * {
+            box-sizing:border-box;
+        }
 
         .chess-heading {
             display:flex;
@@ -145,7 +204,9 @@ document.addEventListener('DOMContentLoaded', () => {
             font-size:25px;
         }
 
-        .chess-brand span { color:#ed1735; }
+        .chess-brand span {
+            color:#ed1735;
+        }
 
         .chess-online {
             display:flex;
@@ -171,7 +232,9 @@ document.addEventListener('DOMContentLoaded', () => {
             align-items:start;
         }
 
-        .chess-main { min-width:0; }
+        .chess-main {
+            min-width:0;
+        }
 
         .chess-player {
             display:flex;
@@ -196,7 +259,10 @@ document.addEventListener('DOMContentLoaded', () => {
             font-size:22px;
         }
 
-        .chess-player-info { min-width:0; flex:1; }
+        .chess-player-info {
+            min-width:0;
+            flex:1;
+        }
 
         .chess-player-name {
             overflow:hidden;
@@ -247,8 +313,13 @@ document.addEventListener('DOMContentLoaded', () => {
             -webkit-tap-highlight-color:transparent;
         }
 
-        .chess-light { background:#741329; }
-        .chess-dark { background:#100d0e; }
+        .chess-light {
+            background:#741329;
+        }
+
+        .chess-dark {
+            background:#100d0e;
+        }
 
         .chess-square.chess-selected {
             outline:3px solid #ff3153;
@@ -257,7 +328,50 @@ document.addEventListener('DOMContentLoaded', () => {
             z-index:2;
         }
 
-        /* НАСТОЯЩИЕ ИЗОБРАЖЕНИЯ ФИГУР */
+        /* КРАСНЫЕ ТОЧКИ ДОСТУПНЫХ ХОДОВ */
+
+        .chess-square.chess-legal::after {
+            content:"";
+            position:absolute;
+            width:25%;
+            height:25%;
+            border-radius:50%;
+            background:#ff1744;
+            box-shadow:
+                0 0 5px #ff1744,
+                0 0 12px rgba(255,23,68,.85);
+            pointer-events:none;
+            z-index:4;
+            animation:legalAppear .18s ease-out both;
+        }
+
+        /* КРАСНОЕ КОЛЬЦО ДЛЯ ВЗЯТИЯ */
+
+        .chess-square.chess-capture::after {
+            content:"";
+            position:absolute;
+            inset:5%;
+            border:3px solid #ff1744;
+            border-radius:50%;
+            background:rgba(255,0,40,.12);
+            box-shadow:
+                0 0 7px rgba(255,0,50,.8),
+                inset 0 0 8px rgba(255,0,50,.25);
+            pointer-events:none;
+            z-index:4;
+            animation:legalAppear .18s ease-out both;
+        }
+
+        @keyframes legalAppear {
+            from {
+                opacity:0;
+                transform:scale(.35);
+            }
+            to {
+                opacity:1;
+                transform:scale(1);
+            }
+        }
 
         .chess-piece-img {
             display:block;
@@ -269,6 +383,7 @@ document.addEventListener('DOMContentLoaded', () => {
             -webkit-user-drag:none;
             filter:drop-shadow(0 3px 3px rgba(0,0,0,.7));
             transition:transform .12s ease;
+            z-index:1;
         }
 
         .chess-square.chess-selected .chess-piece-img {
@@ -277,15 +392,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         .chess-coord {
             position:absolute;
-            z-index:3;
+            z-index:5;
             color:rgba(255,255,255,.65);
             font-size:8px;
             font-weight:800;
             pointer-events:none;
         }
 
-        .chess-coord-rank { top:3px; left:4px; }
-        .chess-coord-file { right:4px; bottom:3px; }
+        .chess-coord-rank {
+            top:3px;
+            left:4px;
+        }
+
+        .chess-coord-file {
+            right:4px;
+            bottom:3px;
+        }
 
         .chess-status {
             display:flex;
@@ -400,7 +522,9 @@ document.addEventListener('DOMContentLoaded', () => {
             line-height:1.8;
         }
 
-        .chess-move-empty { color:#666; }
+        .chess-move-empty {
+            color:#666;
+        }
 
         #chessLobby {
             max-width:440px;
@@ -458,25 +582,35 @@ document.addEventListener('DOMContentLoaded', () => {
             font-weight:900;
         }
 
-        .leaderboard-item span:nth-child(2) { flex:1; }
+        .leaderboard-item span:nth-child(2) {
+            flex:1;
+        }
+
         .leaderboard-item span:last-child {
             color:#aaa;
             font-weight:800;
         }
 
         @media(max-width:620px) {
-            .chess-layout { grid-template-columns:1fr; }
+            .chess-layout {
+                grid-template-columns:1fr;
+            }
+
             .chess-sidebar {
                 display:grid;
                 grid-template-columns:1fr 1fr;
             }
+
             .chess-sidebar .chess-card:last-child {
                 grid-column:1/-1;
             }
         }
 
         @media(max-width:360px) {
-            .chess-sidebar { grid-template-columns:1fr; }
+            .chess-sidebar {
+                grid-template-columns:1fr;
+            }
+
             .chess-sidebar .chess-card:last-child {
                 grid-column:auto;
             }
@@ -517,7 +651,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 Q68 31 73 47 Q81 66 70 78Z"/>
                 <path d="M32 79 H70 L80 91 H20Z"/>
                 <circle cx="56" cy="29" r="3" fill="${outline}" stroke="none"/>
-                <path d="M30 45 Q45 43 53 51" fill="none" stroke="${outline}" stroke-width="3"/>
+                <path d="M30 45 Q45 43 53 51" fill="none"
+                stroke="${outline}" stroke-width="3"/>
             `,
             B: `
                 <path d="M50 10 C37 10 32 22 38 34
@@ -525,7 +660,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 C54 48 59 42 62 34 C68 22 63 10 50 10Z"/>
                 <path d="M30 79 H70 L78 88 H22Z"/>
                 <path d="M16 90 H84 V97 H16Z"/>
-                <path d="M42 20 L58 37" stroke="${outline}" stroke-width="4" fill="none"/>
+                <path d="M42 20 L58 37" stroke="${outline}"
+                stroke-width="4" fill="none"/>
             `,
             Q: `
                 <path d="M20 29 L31 60 L69 60 L80 29
@@ -557,12 +693,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         <stop offset=".35" stop-color="${main}"/>
                         <stop offset="1" stop-color="${dark}"/>
                     </linearGradient>
-                    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0" stop-color="${light}"/>
-                        <stop offset=".5" stop-color="${main}"/>
-                        <stop offset="1" stop-color="${dark}"/>
-                    </linearGradient>
-                    <filter id="shadow" x="-30%" y="-30%" width="160%" height="170%">
+
+                    <filter id="shadow" x="-30%" y="-30%"
+                            width="160%" height="170%">
                         <feGaussianBlur in="SourceAlpha" stdDeviation="2.5"/>
                         <feOffset dy="3"/>
                         <feComponentTransfer>
@@ -585,7 +718,8 @@ document.addEventListener('DOMContentLoaded', () => {
             </svg>
         `;
 
-        return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+        return 'data:image/svg+xml;charset=UTF-8,' +
+            encodeURIComponent(svg);
     }
 
     const pieceImages = {};
@@ -608,6 +742,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="chess-brand-mark">R</div>
                 <div>REQUIEM <span>CHESS</span></div>
             </div>
+
             <div class="chess-online">
                 <span class="chess-online-dot"></span>
                 ONLINE
@@ -616,16 +751,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         <div id="chessLobby">
             <h2 class="chess-lobby-title">ШАХМАТНАЯ АРЕНА</h2>
+
             <div class="chess-lobby-subtitle">
                 Создай комнату или присоединись к сопернику
             </div>
+
             <button class="chess-button" id="createChess">
                 СОЗДАТЬ КОМНАТУ
             </button>
+
             <div class="chess-divider">ИЛИ</div>
+
             <input id="chessCode" maxlength="6"
                    placeholder="КОД КОМНАТЫ"
                    autocomplete="off">
+
             <button class="chess-button chess-button-secondary"
                     id="joinChess">
                 ПРИСОЕДИНИТЬСЯ
@@ -635,13 +775,20 @@ document.addEventListener('DOMContentLoaded', () => {
         <div id="chessGame" style="display:none">
             <div class="chess-layout">
                 <div class="chess-main">
+
                     <div class="chess-player">
                         <div class="chess-player-avatar">♞</div>
+
                         <div class="chess-player-info">
-                            <div class="chess-player-name" id="opponentName">Соперник</div>
+                            <div class="chess-player-name" id="opponentName">
+                                Соперник
+                            </div>
                             <div class="chess-player-rank">ELO 1000</div>
                         </div>
-                        <div class="chess-player-side" id="opponentSide">ЧЁРНЫЕ</div>
+
+                        <div class="chess-player-side" id="opponentSide">
+                            ЧЁРНЫЕ
+                        </div>
                     </div>
 
                     <div class="chess-board-frame">
@@ -650,15 +797,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     <div class="chess-player" style="margin-top:10px">
                         <div class="chess-player-avatar">R</div>
+
                         <div class="chess-player-info">
                             <div class="chess-player-name" id="myChessName"></div>
                             <div class="chess-player-rank">ELO 1000</div>
                         </div>
-                        <div class="chess-player-side" id="mySide">КРАСНЫЕ</div>
+
+                        <div class="chess-player-side" id="mySide">
+                            КРАСНЫЕ
+                        </div>
                     </div>
 
                     <div class="chess-status">
-                        <span class="chess-status-label">Состояние партии</span>
+                        <span class="chess-status-label">
+                            Состояние партии
+                        </span>
                         <span id="chessStatus">Подключение...</span>
                     </div>
                 </div>
@@ -668,6 +821,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="chess-card-title">Комната</div>
                         <div class="chess-room-code" id="chessRoomCode"></div>
                         <div class="chess-room-hint">Отправь код другу</div>
+
                         <button class="chess-button" id="copyChessCode">
                             КОПИРОВАТЬ КОД
                         </button>
@@ -676,12 +830,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="chess-card">
                         <div class="chess-card-title">История ходов</div>
                         <div class="chess-moves" id="chessMoves">
-                            <span class="chess-move-empty">Ходы появятся здесь</span>
+                            <span class="chess-move-empty">
+                                Ходы появятся здесь
+                            </span>
                         </div>
                     </div>
 
                     <div class="chess-card">
                         <div class="chess-card-title">Управление</div>
+
                         <button class="chess-button chess-button-secondary"
                                 id="leaveChess">
                             ВЫЙТИ ИЗ ИГРЫ
@@ -707,6 +864,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('openChess')?.addEventListener('click', () => {
         if (gamesHub) gamesHub.style.display = 'none';
         if (chessScreen) chessScreen.style.display = 'block';
+
         chessPanel.style.display = 'block';
     });
 
@@ -742,6 +900,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let playerColor = null;
     let currentFen = INITIAL_FEN;
     let selectedSquare = null;
+    let legalMoves = [];
     let gameFinished = false;
     let isMyTurn = false;
     let boardFlipped = false;
@@ -800,13 +959,35 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================
-    // BOARD RENDERING — SVG PIECES
+    // LEGAL MOVES
+    // ==========================================
+
+    async function getLegalMoves(square) {
+        try {
+            await loadChessEngine();
+
+            const chess = new window.Chess(currentFen);
+
+            return chess.moves({
+                square,
+                verbose: true
+            });
+        } catch (error) {
+            console.error('Ошибка расчёта ходов:', error);
+            showToast('Не удалось рассчитать ходы');
+            return [];
+        }
+    }
+
+    // ==========================================
+    // BOARD RENDERING
     // ==========================================
 
     function renderBoard() {
         if (!boardElement) return;
 
         const board = parseFen(currentFen);
+
         boardElement.innerHTML = '';
 
         const coordinates = [];
@@ -830,8 +1011,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const square = document.createElement('div');
 
             square.className = 'chess-square';
+
             square.classList.add(
-                (row + col) % 2 === 0 ? 'chess-light' : 'chess-dark'
+                (row + col) % 2 === 0
+                    ? 'chess-light'
+                    : 'chess-dark'
             );
 
             const name = files[col] + (8 - row);
@@ -841,6 +1025,21 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             square.dataset.square = name;
+
+            const availableMove = legalMoves.find(
+                move => move.to === name
+            );
+
+            if (availableMove) {
+                if (
+                    availableMove.captured ||
+                    availableMove.flags.includes('e')
+                ) {
+                    square.classList.add('chess-capture');
+                } else {
+                    square.classList.add('chess-legal');
+                }
+            }
 
             if (piece) {
                 const image = document.createElement('img');
@@ -855,19 +1054,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (col === (boardFlipped ? 7 : 0)) {
                 const rank = document.createElement('span');
+
                 rank.className = 'chess-coord chess-coord-rank';
                 rank.textContent = String(8 - row);
+
                 square.appendChild(rank);
             }
 
             if (row === (boardFlipped ? 0 : 7)) {
                 const file = document.createElement('span');
+
                 file.className = 'chess-coord chess-coord-file';
                 file.textContent = files[col];
+
                 square.appendChild(file);
             }
 
-            square.addEventListener('click', () => handleSquareClick(name));
+            square.addEventListener('click', () => {
+                handleSquareClick(name);
+            });
 
             boardElement.appendChild(square);
         });
@@ -877,7 +1082,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // MOVE LOGIC
     // ==========================================
 
-    function handleSquareClick(square) {
+    async function handleSquareClick(square) {
         if (!socket || socket.readyState !== WebSocket.OPEN) {
             showToast('Нет подключения к игре');
             return;
@@ -896,7 +1101,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const board = parseFen(currentFen);
         const col = files.indexOf(square[0]);
         const row = 8 - Number(square[1]);
+
         const clickedPiece = board[row]?.[col] || '';
+
+        // Выбор своей фигуры
 
         if (!selectedSquare) {
             if (!clickedPiece || !isOwnPiece(clickedPiece)) {
@@ -905,29 +1113,64 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             selectedSquare = square;
+            legalMoves = await getLegalMoves(square);
+
+            // Проверяем, что позиция не изменилась
+            if (selectedSquare !== square) return;
+
             renderBoard();
             return;
         }
+
+        // Повторное нажатие — отмена выбора
 
         if (selectedSquare === square) {
             selectedSquare = null;
+            legalMoves = [];
+
             renderBoard();
             return;
         }
+
+        // Выбор другой своей фигуры
 
         if (clickedPiece && isOwnPiece(clickedPiece)) {
             selectedSquare = square;
+            legalMoves = await getLegalMoves(square);
+
+            if (selectedSquare !== square) return;
+
             renderBoard();
             return;
         }
 
-        const move = selectedSquare + square;
+        // Проверка легального хода
+
+        const availableMove = legalMoves.find(
+            move => move.to === square
+        );
+
+        if (!availableMove) {
+            showToast('Сюда нельзя сходить');
+            return;
+        }
+
+        let moveString = selectedSquare + square;
+
+        // Автоматическое превращение пешки в ферзя
+
+        if (availableMove.flags.includes('p')) {
+            moveString += 'q';
+        }
+
         selectedSquare = null;
+        legalMoves = [];
+
         renderBoard();
 
         socket.send(JSON.stringify({
             type: 'move',
-            move
+            move: moveString
         }));
     }
 
@@ -952,7 +1195,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         moveHistory.forEach((item, index) => {
             const line = document.createElement('div');
+
             line.textContent = `${index + 1}. ${item}`;
+
             chessMoves.appendChild(line);
         });
     }
@@ -971,12 +1216,15 @@ document.addEventListener('DOMContentLoaded', () => {
         currentRoom = room;
         playerColor = null;
         selectedSquare = null;
+        legalMoves = [];
         gameFinished = false;
         isMyTurn = false;
         boardFlipped = false;
         currentFen = INITIAL_FEN;
 
-        if (chessRoomCode) chessRoomCode.textContent = room;
+        if (chessRoomCode) {
+            chessRoomCode.textContent = room;
+        }
 
         resetMoveHistory();
         showChessGame();
@@ -1035,23 +1283,33 @@ document.addEventListener('DOMContentLoaded', () => {
             myChessName.textContent = username;
 
             mySide.textContent =
-                playerColor === 'white' ? 'КРАСНЫЕ' : 'ЧЁРНЫЕ';
+                playerColor === 'white'
+                    ? 'КРАСНЫЕ'
+                    : 'ЧЁРНЫЕ';
 
             opponentSide.textContent =
-                playerColor === 'white' ? 'ЧЁРНЫЕ' : 'КРАСНЫЕ';
+                playerColor === 'white'
+                    ? 'ЧЁРНЫЕ'
+                    : 'КРАСНЫЕ';
         }
 
-        if (data.fen) currentFen = data.fen;
+        if (data.fen) {
+            currentFen = data.fen;
+        }
 
         if (typeof data.turn === 'string') {
             const turn = data.turn.toLowerCase();
 
             isMyTurn =
-                (playerColor === 'white' && ['w', 'white'].includes(turn)) ||
-                (playerColor === 'black' && ['b', 'black'].includes(turn));
+                (playerColor === 'white' &&
+                    ['w', 'white'].includes(turn)) ||
+                (playerColor === 'black' &&
+                    ['b', 'black'].includes(turn));
         }
 
-        if (data.move) addMoveToHistory(data.move);
+        if (data.move) {
+            addMoveToHistory(data.move);
+        }
 
         if (data.opponent_name) {
             opponentName.textContent = data.opponent_name;
@@ -1075,6 +1333,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         selectedSquare = null;
+        legalMoves = [];
+
         renderBoard();
     }
 
@@ -1095,13 +1355,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     'Content-Type': 'application/json',
                     'X-Telegram-Init-Data': initData()
                 },
-                body: JSON.stringify({ initData: initData() })
+                body: JSON.stringify({
+                    initData: initData()
+                })
             });
 
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.detail || data.error || 'Ошибка создания');
+                throw new Error(
+                    data.detail ||
+                    data.error ||
+                    'Ошибка создания'
+                );
             }
 
             const room =
@@ -1119,7 +1385,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error(error);
-            showToast(error.message || 'Ошибка создания комнаты');
+
+            showToast(
+                error.message || 'Ошибка создания комнаты'
+            );
         } finally {
             button.disabled = false;
             button.textContent = 'СОЗДАТЬ КОМНАТУ';
@@ -1162,6 +1431,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('Код скопирован');
         } catch {
             const input = document.createElement('textarea');
+
             input.value = currentRoom;
             document.body.appendChild(input);
             input.select();
@@ -1191,6 +1461,7 @@ document.addEventListener('DOMContentLoaded', () => {
         currentRoom = null;
         playerColor = null;
         selectedSquare = null;
+        legalMoves = [];
         gameFinished = false;
         isMyTurn = false;
         boardFlipped = false;
@@ -1221,7 +1492,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('chessCode')
         ?.addEventListener('keydown', event => {
-            if (event.key === 'Enter') joinChessRoom();
+            if (event.key === 'Enter') {
+                joinChessRoom();
+            }
         });
 
     // ==========================================
@@ -1236,11 +1509,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     'Content-Type': 'application/json',
                     'X-Telegram-Init-Data': initData()
                 },
-                body: JSON.stringify({ initData: initData() })
+                body: JSON.stringify({
+                    initData: initData()
+                })
             });
 
             if (!response.ok) {
-                console.warn('Registration failed:', response.status);
+                console.warn(
+                    'Registration failed:',
+                    response.status
+                );
             }
         } catch (error) {
             console.error('Registration error:', error);
@@ -1276,7 +1554,8 @@ document.addEventListener('DOMContentLoaded', () => {
             container.innerHTML = '';
 
             if (!players.length) {
-                container.textContent = 'Пока нет игроков в рейтинге';
+                container.textContent =
+                    'Пока нет игроков в рейтинге';
                 return;
             }
 
